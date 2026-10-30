@@ -1,5 +1,10 @@
 # Eink photo frame
 
+## Hardware
+
+**Display**     Seeed 7.3-inch ePaper - Spectra 6 800x480
+**Board**       XIAO ePaper Display Board(nRF52840) - EN04
+
 ## Installation
 
 
@@ -10,10 +15,12 @@
 
 5. Get your image: 
 ```bash
-uv run spectra6_converter.py ../../images/800x480.jpg -o my_image.h --preview preview.png
+uv run src/einkdisplay/spectra6_converter.py images/2/cropped.jpg --raw images/2/raw.bin
+
+uv run src/einkdisplay/upload_image.py images/2/raw.bin 
 ```
 
 ## Cool links
 
 
-[Image to C array converter](https://projedefteri.com/en/tools/lcd-assistant/)
+[Image to C array converter (not suitable for spectra 6 display :(](https://projedefteri.com/en/tools/lcd-assistant/)
