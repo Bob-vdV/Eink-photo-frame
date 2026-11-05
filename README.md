@@ -24,3 +24,14 @@ uv run src/einkdisplay/upload_image.py images/2/raw.bin
 
 
 [Image to C array converter (not suitable for spectra 6 display :(](https://projedefteri.com/en/tools/lcd-assistant/)
+
+
+
+## TODO
+
+[ ] Get buttons to work
+[ ] Use bluetooth LE to send photos
+[ ] Use website to send photos
+[ ] Auto cycle photos
+[ ] Buy photo frame
+[ ] Print stuff for frame
