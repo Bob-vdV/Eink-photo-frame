@@ -1,26 +1,31 @@
 /*
- * epaper_gallery_raw.ino
+ * epaper_gallery_sd.ino
  *
  * Store packed-4bpp Spectra 6 images in the onboard QSPI flash of a
- * XIAO nRF52840 Plus on an EN04 ePaper board, and display them on demand.
+ * XIAO nRF52840 Plus on an EN04 ePaper board, display them on demand,
+ * and load them from a microSD card wired to the shared SPI bus.
  *
  * Board:  Seeed XIAO nRF52840 Plus
  * Core:   Seeeduino nRF52 (Adafruit-based, v1.x)
  *
  * ---------------------------------------------------------------------------
- * WHY RAW FLASH INSTEAD OF A FILESYSTEM
+ * HARDWARE
  * ---------------------------------------------------------------------------
- * InternalFileSystem mounts a LittleFS whose usable space caps out at
- * 24,576 bytes (6 x 4 KB blocks) on this board - the ladder test proved it:
- * a 24 KB file writes, a 28 KB file does not. Its begin() takes no arguments,
- * so there is no supported way to hand it a correct device descriptor.
+ *   ePaper  : EN04 driver board, 7.0" Spectra 6, ED2208 (Seeed_GFX2)
+ *   Flash   : onboard P25Q16H QSPI, 2 MB
+ *   SD card : SPI microSD module, shared bus with the ePaper
  *
- * These images are all exactly 192,000 bytes and each lives in a known slot,
- * so a filesystem buys nothing. We drive Adafruit_SPIFlash directly with an
- * explicit P25Q16H descriptor and manage the layout ourselves.
+ *   SD module   XIAO pin
+ *   ---------   --------
+ *   SCK         D8      (top solder joint, shared with ePaper)
+ *   MOSI        D10     (top solder joint, shared)
+ *   MISO        D9      (top solder joint, shared; panel never drives it)
+ *   CS          D4      (free per Seeed_GFX2's nrfDisplayPins())
+ *   VCC         3V3
+ *   GND         GND
  *
- * Verified on hardware: the V command passes at sectors 483/490/497/504,
- * proving the full 2 MB is addressable.
+ *   Seeed_GFX2 claims for EN04: D3, D6, D7, D8, D10 + raw GPIO 35/30
+ *   (D16/D11 via underside pads). D0-D2, D4, D5, D9 are free.
  *
  * ---------------------------------------------------------------------------
  * FLASH LAYOUT
@@ -31,31 +36,32 @@
  *
  *   slot n starts at n * 196608
  *
- * The whole slot is erased once before an upload, so individual writes need
- * no sector alignment. Each chunk is exactly 20 image rows (8,000 bytes),
- * which keeps pushImage4BPP() calls row-aligned.
+ *   Each chunk is exactly 20 image rows (8,000 bytes), keeping
+ *   pushImage4BPP() calls row-aligned.
  *
  * ---------------------------------------------------------------------------
  * SERIAL PROTOCOL  (115200 baud)
  * ---------------------------------------------------------------------------
- *   P              probe: chip ID, geometry, slot table
+ *   P              probe: chip ID, geometry, slot table, SD status
  *   L              list stored slots
  *   D <n>          display slot n
  *   X <n>          clear slot n
  *   F              clear the slot table (image data stays but is unreachable)
  *   V              write/read test at high offsets - proves the full 2 MB
  *   U <n>          upload slot n; binary payload follows
+ *   M              list files on the SD card (marks exactly-192000 as VALID)
+ *   C <name> <slot>  copy an SD file into flash slot <slot>
+ *   CD <name>      display an SD file directly (no flash, no slot limit)
  *
- * Upload framing:
+ * Upload framing (U):
  *   host -> board   'U' ' ' <n> '\n'
  *   board -> host   "READY\n"
  *   host -> board   <len:uint32 LE> <payload:len> <sum:uint32 LE>
  *   board -> host   "OK <n> <len>\n"   or   "ERR <reason>\n"
  *
- * IMPORTANT: with VERBOSE_UPLOAD 0 the board emits exactly two lines during
- * an upload - "READY" and then the single verdict line. Host scripts that
- * read one line as the result depend on this. Turn verbose on only when you
- * are debugging by hand in a serial monitor.
+ * SD files must be exactly 192,000 bytes (800x480 packed 4bpp) - exactly
+ * what the web converter's "Save .bin" button produces. Filenames are
+ * matched case-insensitively but keep them 8.3-ish (IMG001.4BP) for sanity.
  *
  * ---------------------------------------------------------------------------
  * FLASH WEAR
@@ -63,8 +69,10 @@
  * Uploading erases 48 sectors. Never put flash writes in loop().
  */
 
-#include <Arduino.h>
+#include <string.h>
+#include <ctype.h>
 #include <Adafruit_SPIFlash.h>
+#include <SdFat.h>
 #include <Seeed_GFX.h>
 #include "board/boards/XIAO_ePaper_Boards.h"
 #include "panel/configs/Seeed_Panel_Configs.h"
@@ -76,10 +84,14 @@
  *
  * Built from the P25Q16H datasheet. JEDEC ID 0x856015 - manufacturer 0x85,
  * memory type 0x60, capacity 0x15 (2^21 = 2 MB).
+ *
+ * NOTE: named EPAPER_FLASH, NOT P25Q16H - current Adafruit SPIFlash defines
+ * P25Q16H as a macro in flash_devices.h, and colliding with it breaks the
+ * build ("expected unqualified-id before '{' token").
  * ===========================================================================
  */
 
-SPIFlash_Device_t const spiFlash = {
+SPIFlash_Device_t const EPAPER_FLASH = {
   .total_size                  = (1UL << 21),   // 2 MiB
   .start_up_time_us            = 10000,
   .manufacturer_id             = 0x85,
@@ -99,6 +111,17 @@ Adafruit_FlashTransport_QSPI flashTransport;
 Adafruit_SPIFlash flash(&flashTransport);
 
 Seeed_GFX display;
+
+/* ===========================================================================
+ * SD CARD
+ * ===========================================================================
+ */
+
+#define SD_CS           D4
+#define SD_SCK_SPEED    SD_SCK_MHZ(2)   // drop to SD_SCK_MHZ(2) if flaky
+
+SdFat sd;
+static bool sdOK = false;
 
 /* ===========================================================================
  * GEOMETRY
@@ -329,10 +352,12 @@ static void probe(void) {
     Serial.print(largestFreeBlock());
     Serial.println(" bytes");
 
+    Serial.print("SD card:      ");
+    Serial.println(sdOK ? "OK" : "not initialized");
+
     Serial.println("Stored images:");
     listSlots();
     Serial.println("-------------");
-    Serial.flush();
 }
 
 static void verifyHighOffsets(void) {
@@ -598,6 +623,249 @@ static void clearAllSlots(void) {
     }
 }
 
+
+/* ===========================================================================
+ * SD COMMANDS
+ * ===========================================================================
+ */
+
+// Find a file in the SD root by name (case-insensitive). On success, f is
+// left open and must be closed by the caller.
+static bool sdFindByName(const char *name, File &f) {
+    File root = sd.open("/");
+    if (!root) return false;
+
+    while (f.openNext(&root, O_RDONLY)) {
+        if (f.isDir()) { f.close(); continue; }
+
+        char nm[64];
+        f.getName(nm, sizeof(nm));
+
+        if (strcasecmp(nm, name) == 0) {
+            root.close();
+            return true;
+        }
+        f.close();
+    }
+
+    root.close();
+    return false;
+}
+
+static void sdList(void) {
+    if (!sdOK) {
+        Serial.println("ERR SD not initialized");
+        return;
+    }
+
+    File root = sd.open("/");
+    if (!root) {
+        Serial.println("ERR cannot open SD root");
+        return;
+    }
+
+    Serial.println("SD files:");
+    File f;
+    uint8_t found = 0;
+
+    while (f.openNext(&root, O_RDONLY)) {
+        if (f.isDir()) { f.close(); continue; }
+
+        char nm[64];
+        f.getName(nm, sizeof(nm));
+        uint32_t sz = f.fileSize();
+
+        Serial.print("  ");
+        Serial.print(nm);
+        Serial.print("  ");
+        Serial.print(sz);
+        Serial.print(" bytes");
+        Serial.println(sz == IMG_BYTES ? "  [VALID]" : "  [wrong size]");
+
+        found++;
+        f.close();
+    }
+
+    if (!found) Serial.println("  (no files)");
+    root.close();
+}
+
+// C <name> <slot> : copy an SD file into a flash slot.
+static bool sdCopyToSlot(const char *name, uint8_t slot) {
+    if (!sdOK) {
+        Serial.println("ERR SD not initialized");
+        return false;
+    }
+    if (slot >= MAX_IMAGES) {
+        Serial.println("ERR slot out of range");
+        return false;
+    }
+
+    File f;
+    if (!sdFindByName(name, f)) {
+        Serial.print("ERR file not found: ");
+        Serial.println(name);
+        return false;
+    }
+
+    uint32_t sz = f.fileSize();
+    if (sz != IMG_BYTES) {
+        Serial.print("ERR wrong size ");
+        Serial.print(sz);
+        Serial.print(" (need ");
+        Serial.print(IMG_BYTES);
+        Serial.println(")");
+        f.close();
+        return false;
+    }
+
+    Serial.print("Copying ");
+    Serial.print(name);
+    Serial.print(" (");
+    Serial.print(sz);
+    Serial.print(" bytes) to slot ");
+    Serial.print(slot);
+    Serial.print(": erasing ");
+    Serial.print(SLOT_BYTES / SECTOR_SIZE);
+    Serial.println(" sectors...");
+    Serial.flush();
+
+    // Mark slot invalid first, same safety as interrupted USB uploads.
+    slotFlags[slot] = 0;
+    saveSlotTable();
+
+    if (!eraseSlot(slot, false)) {
+        Serial.println("ERR erase failed");
+        f.close();
+        return false;
+    }
+
+    uint32_t sum = 0;
+
+    for (uint8_t c = 0; c < CHUNKS_PER_IMG; c++) {
+        if (f.read(chunkBuf, CHUNK_BYTES) != (int)CHUNK_BYTES) {
+            Serial.print("ERR SD read failed at chunk ");
+            Serial.println(c);
+            f.close();
+            return false;
+        }
+
+        for (uint32_t i = 0; i < CHUNK_BYTES; i++) sum += chunkBuf[i];
+
+        uint32_t addr = slotBase(slot) + (uint32_t)c * CHUNK_BYTES;
+
+        if (!writeAndVerify(addr, chunkBuf, CHUNK_BYTES)) {
+            Serial.print("ERR write/verify failed at chunk ");
+            Serial.print(c);
+            Serial.print(" offset 0x");
+            Serial.println(addr, HEX);
+            f.close();
+            return false;
+        }
+
+#if VERBOSE_UPLOAD
+        Serial.print(".");
+        Serial.flush();
+#endif
+    }
+    f.close();
+
+    slotFlags[slot] = 1;
+    if (!saveSlotTable()) {
+        slotFlags[slot] = 0;
+        Serial.println("ERR could not commit slot table");
+        return false;
+    }
+
+    Serial.print("OK copied ");
+    Serial.print(name);
+    Serial.print(" to slot ");
+    Serial.print(slot);
+    Serial.print(" (sum ");
+    Serial.print(sum);
+    Serial.println(")");
+    return true;
+}
+
+// CD <name> : display a file straight from the SD card.
+// Streams chunk-by-chunk, no flash involvement, no slot limit.
+static bool sdDisplay(const char *name) {
+    if (!sdOK) {
+        Serial.println("ERR SD not initialized");
+        return false;
+    }
+
+    File f;
+    if (!sdFindByName(name, f)) {
+        Serial.print("ERR file not found: ");
+        Serial.println(name);
+        return false;
+    }
+
+    uint32_t sz = f.fileSize();
+    if (sz != IMG_BYTES) {
+        Serial.print("ERR wrong size ");
+        Serial.print(sz);
+        Serial.print(" (need ");
+        Serial.print(IMG_BYTES);
+        Serial.println(")");
+        f.close();
+        return false;
+    }
+
+    Serial.print("Streaming ");
+    Serial.print(name);
+    Serial.print(" from SD: ");
+    Serial.print(CHUNKS_PER_IMG);
+    Serial.print(" chunks of ");
+    Serial.print(CHUNK_ROWS);
+    Serial.println(" rows...");
+    Serial.flush();
+
+    uint32_t t0 = millis();
+
+    for (uint8_t c = 0; c < CHUNKS_PER_IMG; c++) {
+        if (f.read(chunkBuf, CHUNK_BYTES) != (int)CHUNK_BYTES) {
+            Serial.print("ERR SD read failed at chunk ");
+            Serial.println(c);
+            f.close();
+            return false;
+        }
+
+        uint16_t y = (uint16_t)(c * CHUNK_ROWS);
+
+        if (!display.pushImage4BPP(0, y, IMG_W, CHUNK_ROWS, chunkBuf, true)) {
+            Serial.print("ERR push rejected at chunk ");
+            Serial.print(c);
+            Serial.print(" (y=");
+            Serial.print(y);
+            Serial.println(")");
+            f.close();
+            return false;
+        }
+    }
+    f.close();
+
+    Serial.print("All ");
+    Serial.print(CHUNKS_PER_IMG);
+    Serial.print(" chunks streamed in ");
+    Serial.print(millis() - t0);
+    Serial.println(" ms");
+
+    Serial.println("Refreshing panel...");
+    const GfxResult refreshResult = display.refresh();
+    if (!refreshResult) Serial.println(refreshResult.message);
+    Serial.println("Refresh done");
+
+    return true;
+}
+
+
+/* ===========================================================================
+ * COMMAND DISPATCH
+ * ===========================================================================
+ */
+
 static void handleLine(char *line) {
     int len = strlen(line);
     while (len > 0 && (line[len - 1] == '\r' || line[len - 1] == ' ')) {
@@ -626,8 +894,43 @@ static void handleLine(char *line) {
 
         case 'U': receiveImage((uint8_t)arg); break;
 
+        case 'M':
+            sdList();
+            break;
+
+        case 'C':
+            if (toupper((unsigned char)line[1]) == 'D') {
+                // CD <name>
+                const char *name = line + 2;
+                while (*name == ' ') name++;
+                sdDisplay(name);
+            } else {
+                // C <name> <slot>  - name is everything before the last space
+                const char *rest = line + 1;
+                while (*rest == ' ') rest++;
+
+                const char *lastSpace = strrchr(rest, ' ');
+                if (!lastSpace) {
+                    Serial.println("ERR usage: C <name> <slot>");
+                    break;
+                }
+
+                char nameBuf[48];
+                size_t nl = (size_t)(lastSpace - rest);
+                if (nl == 0 || nl >= sizeof(nameBuf)) {
+                    Serial.println("ERR bad name");
+                    break;
+                }
+                memcpy(nameBuf, rest, nl);
+                nameBuf[nl] = '\0';
+
+                int slot = atoi(lastSpace + 1);
+                sdCopyToSlot(nameBuf, (uint8_t)slot);
+            }
+            break;
+
         default:
-            Serial.println("ERR unknown command (P L D X F V U)");
+            Serial.println("ERR unknown command (P L D X F V U M C CD)");
             break;
     }
 }
@@ -645,10 +948,10 @@ void setup(void) {
     while (!Serial && (millis() - t0) < 3000) { }
 
     Serial.println();
-    Serial.println("ePaper gallery - raw QSPI flash");
-    Serial.println("Commands: P L D<n> X<n> F V U<n>");
+    Serial.println("ePaper gallery - raw QSPI flash + SD");
+    Serial.println("Commands: P L D<n> X<n> F V U<n> M C<name> <slot> CD<name>");
 
-    if (!flash.begin(&spiFlash)) {
+    if (!flash.begin(&EPAPER_FLASH)) {
         Serial.println("CRITICAL: QSPI flash init failed");
         while (true) {
             digitalWrite(LED_BUILTIN, HIGH);
@@ -672,9 +975,19 @@ void setup(void) {
 
     loadSlotTable();
 
-    //display.begin(Seeed_Product::Seeed_ePaper_7INCH3_C);
+    if (!display.begin<Board_XIAO_ePaper_EN04, Config_Seeed_ePaper_7inch3_Colorful_ED2208>()) {
+        Serial.println(display.lastResult().message);
+        return;
+    }
 
-    if (!display.begin<Board_XIAO_ePaper_EN04, Config_Seeed_ePaper_7inch3_Colorful_ED2208>()) { Serial.println(display.lastResult().message); return; }
+    Serial.print("SD card (CS=D4): ");
+    if (sd.begin(SD_CS, SD_SCK_SPEED)) {
+        sdOK = true;
+        Serial.println("OK");
+    } else {
+        Serial.println("init FAILED:");
+        sd.initErrorPrint(&Serial);
+    }
 
     probe();
 }
