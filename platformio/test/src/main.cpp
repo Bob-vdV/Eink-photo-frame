@@ -1,9 +1,9 @@
 /*
- * epaper_gallery_sd.ino
+ * epaper_gallery_sd.ino  (v2 — adds W <name>: serial upload to SD card)
  *
  * Store packed-4bpp Spectra 6 images in the onboard QSPI flash of a
  * XIAO nRF52840 Plus on an EN04 ePaper board, display them on demand,
- * and load them from a microSD card wired to the shared SPI bus.
+ * and load/save them on a microSD card wired to the shared SPI bus.
  *
  * Board:  Seeed XIAO nRF52840 Plus
  * Core:   Seeeduino nRF52 (Adafruit-based, v1.x)
@@ -13,7 +13,7 @@
  * ---------------------------------------------------------------------------
  *   ePaper  : EN04 driver board, 7.0" Spectra 6, ED2208 (Seeed_GFX2)
  *   Flash   : onboard P25Q16H QSPI, 2 MB
- *   SD card : SPI microSD module, shared bus with the ePaper
+ *   SD card : SPI microSD module (level-shifter type, powered from 5V!)
  *
  *   SD module   XIAO pin
  *   ---------   --------
@@ -21,7 +21,7 @@
  *   MOSI        D10     (top solder joint, shared)
  *   MISO        D9      (top solder joint, shared; panel never drives it)
  *   CS          D4      (free per Seeed_GFX2's nrfDisplayPins())
- *   VCC         3V3
+ *   VCC         5V      (module's own regulator makes 3V3 for the card)
  *   GND         GND
  *
  *   Seeed_GFX2 claims for EN04: D3, D6, D7, D8, D10 + raw GPIO 35/30
@@ -35,7 +35,6 @@
  *   0x1FF000 .. 0x1FFFFF   directory sector (slot table)
  *
  *   slot n starts at n * 196608
- *
  *   Each chunk is exactly 20 image rows (8,000 bytes), keeping
  *   pushImage4BPP() calls row-aligned.
  *
@@ -49,19 +48,19 @@
  *   F              clear the slot table (image data stays but is unreachable)
  *   V              write/read test at high offsets - proves the full 2 MB
  *   U <n>          upload slot n; binary payload follows
+ *   W <name>       upload to SD card as <name>; binary payload follows
  *   M              list files on the SD card (marks exactly-192000 as VALID)
  *   C <name> <slot>  copy an SD file into flash slot <slot>
  *   CD <name>      display an SD file directly (no flash, no slot limit)
  *
- * Upload framing (U):
- *   host -> board   'U' ' ' <n> '\n'
+ * Upload framing (U and W are identical):
+ *   host -> board   'U'/'W' ' ' <arg> '\n'
  *   board -> host   "READY\n"
  *   host -> board   <len:uint32 LE> <payload:len> <sum:uint32 LE>
- *   board -> host   "OK <n> <len>\n"   or   "ERR <reason>\n"
+ *   board -> host   "OK ...\n"   or   "ERR <reason>\n"
  *
  * SD files must be exactly 192,000 bytes (800x480 packed 4bpp) - exactly
- * what the web converter's "Save .bin" button produces. Filenames are
- * matched case-insensitively but keep them 8.3-ish (IMG001.4BP) for sanity.
+ * what the web converter's "Save .bin" button produces.
  *
  * ---------------------------------------------------------------------------
  * FLASH WEAR
@@ -81,10 +80,6 @@
 
 /* ===========================================================================
  * CHIP DESCRIPTOR
- *
- * Built from the P25Q16H datasheet. JEDEC ID 0x856015 - manufacturer 0x85,
- * memory type 0x60, capacity 0x15 (2^21 = 2 MB).
- *
  * NOTE: named EPAPER_FLASH, NOT P25Q16H - current Adafruit SPIFlash defines
  * P25Q16H as a macro in flash_devices.h, and colliding with it breaks the
  * build ("expected unqualified-id before '{' token").
@@ -118,7 +113,7 @@ Seeed_GFX display;
  */
 
 #define SD_CS           D4
-#define SD_SCK_SPEED    SD_SCK_MHZ(2)   // drop to SD_SCK_MHZ(2) if flaky
+#define SD_SCK_SPEED    SD_SCK_MHZ(4)   // drop to SD_SCK_MHZ(2) if flaky
 
 SdFat sd;
 static bool sdOK = false;
@@ -509,25 +504,10 @@ static bool receiveImage(uint8_t n) {
         saveSlotTable();
     }
 
-#if VERBOSE_UPLOAD
-    Serial.print("Erasing slot ");
-    Serial.print(n);
-    Serial.print(" (");
-    Serial.print(SLOT_BYTES / SECTOR_SIZE);
-    Serial.print(" sectors)");
-    Serial.flush();
-#endif
-
     if (!eraseSlot(n, true)) {
         Serial.println("ERR erase failed");
         return false;
     }
-
-#if VERBOSE_UPLOAD
-    Serial.println(" done");
-    Serial.print("Receiving...");
-    Serial.flush();
-#endif
 
     uint32_t sum = 0;
 
@@ -554,11 +534,6 @@ static bool receiveImage(uint8_t n) {
         Serial.flush();
 #endif
     }
-
-#if VERBOSE_UPLOAD
-    Serial.print(" written. Checksum...");
-    Serial.flush();
-#endif
 
     uint8_t sumBytes[4];
     if (!readInto(sumBytes, 4, RX_TIMEOUT)) {
@@ -625,9 +600,38 @@ static void clearAllSlots(void) {
 
 
 /* ===========================================================================
- * SD COMMANDS
+ * SD HELPERS
  * ===========================================================================
  */
+
+// Sanitize a filename from the host: keep alnum, dot, dash, underscore;
+// cap length; strip any path components. Result lives in out (cap+1 bytes).
+static bool sanitizeName(const char *in, char *out, size_t cap) {
+    const char *base = in;
+    const char *slash;
+    while ((slash = strchr(base, '/'))  != NULL) base = slash + 1;
+    while ((slash = strchr(base, '\\')) != NULL) base = slash + 1;
+
+    size_t o = 0;
+    for (const char *p = base; *p && o < cap; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (isalnum(c) || c == '.' || c == '-' || c == '_') {
+            out[o++] = (char)c;
+        } else {
+            return false;   // anything else: reject outright
+        }
+    }
+    out[o] = '\0';
+
+    if (o == 0 || out[0] == '.') return false;
+
+    // Ensure a reasonable extension; default to .4bpp if none.
+    if (!strchr(out, '.')) {
+        if (o + 6 > cap) return false;
+        strcat(out, ".4bpp");
+    }
+    return true;
+}
 
 // Find a file in the SD root by name (case-insensitive). On success, f is
 // left open and must be closed by the caller.
@@ -721,9 +725,7 @@ static bool sdCopyToSlot(const char *name, uint8_t slot) {
 
     Serial.print("Copying ");
     Serial.print(name);
-    Serial.print(" (");
-    Serial.print(sz);
-    Serial.print(" bytes) to slot ");
+    Serial.print(" to slot ");
     Serial.print(slot);
     Serial.print(": erasing ");
     Serial.print(SLOT_BYTES / SECTOR_SIZE);
@@ -740,8 +742,6 @@ static bool sdCopyToSlot(const char *name, uint8_t slot) {
         return false;
     }
 
-    uint32_t sum = 0;
-
     for (uint8_t c = 0; c < CHUNKS_PER_IMG; c++) {
         if (f.read(chunkBuf, CHUNK_BYTES) != (int)CHUNK_BYTES) {
             Serial.print("ERR SD read failed at chunk ");
@@ -749,8 +749,6 @@ static bool sdCopyToSlot(const char *name, uint8_t slot) {
             f.close();
             return false;
         }
-
-        for (uint32_t i = 0; i < CHUNK_BYTES; i++) sum += chunkBuf[i];
 
         uint32_t addr = slotBase(slot) + (uint32_t)c * CHUNK_BYTES;
 
@@ -762,11 +760,6 @@ static bool sdCopyToSlot(const char *name, uint8_t slot) {
             f.close();
             return false;
         }
-
-#if VERBOSE_UPLOAD
-        Serial.print(".");
-        Serial.flush();
-#endif
     }
     f.close();
 
@@ -780,15 +773,11 @@ static bool sdCopyToSlot(const char *name, uint8_t slot) {
     Serial.print("OK copied ");
     Serial.print(name);
     Serial.print(" to slot ");
-    Serial.print(slot);
-    Serial.print(" (sum ");
-    Serial.print(sum);
-    Serial.println(")");
+    Serial.println(slot);
     return true;
 }
 
 // CD <name> : display a file straight from the SD card.
-// Streams chunk-by-chunk, no flash involvement, no slot limit.
 static bool sdDisplay(const char *name) {
     if (!sdOK) {
         Serial.println("ERR SD not initialized");
@@ -860,6 +849,117 @@ static bool sdDisplay(const char *name) {
     return true;
 }
 
+// W <name> : receive an image over serial and write it to the SD card.
+// Framing identical to U. Overwrites an existing file of the same name.
+static bool sdReceive(const char *rawName) {
+    if (!sdOK) {
+        Serial.println("ERR SD not initialized");
+        return false;
+    }
+
+    char name[48];
+    if (!sanitizeName(rawName, name, sizeof(name) - 1)) {
+        Serial.print("ERR bad name: ");
+        Serial.println(rawName);
+        return false;
+    }
+
+    Serial.println("READY");
+
+    uint8_t hdr[4];
+    if (!readInto(hdr, 4, RX_TIMEOUT)) {
+        Serial.println("ERR timeout on length");
+        return false;
+    }
+
+    uint32_t len = (uint32_t)hdr[0]
+                 | ((uint32_t)hdr[1] << 8)
+                 | ((uint32_t)hdr[2] << 16)
+                 | ((uint32_t)hdr[3] << 24);
+
+    if (len != IMG_BYTES) {
+        Serial.print("ERR bad length ");
+        Serial.println(len);
+        return false;
+    }
+
+    // Remove any previous version so a partial write can't mix with old data.
+    {
+        File old;
+        if (sdFindByName(name, old)) {
+            old.close();
+            if (!sd.remove(name)) {
+                Serial.println("ERR could not remove old file");
+                return false;
+            }
+        }
+    }
+
+    File f = sd.open(name, O_WRONLY | O_CREAT | O_TRUNC);
+    if (!f) {
+        Serial.print("ERR cannot create ");
+        Serial.println(name);
+        return false;
+    }
+
+    // Receive the whole payload chunk by chunk. SD writes are slower than
+    // the serial stream, so we keep up by writing each 8 KB chunk as it
+    // arrives; the serial RX FIFO (256 B) plus readInto's chunk pacing is
+    // enough headroom at 115200 baud.
+    uint32_t sum = 0;
+
+    for (uint8_t c = 0; c < CHUNKS_PER_IMG; c++) {
+        if (!readInto(chunkBuf, CHUNK_BYTES, RX_TIMEOUT)) {
+            Serial.println("ERR timeout mid-payload");
+            f.close();
+            sd.remove(name);
+            return false;
+        }
+
+        for (uint32_t i = 0; i < CHUNK_BYTES; i++) sum += chunkBuf[i];
+
+        if (f.write(chunkBuf, CHUNK_BYTES) != CHUNK_BYTES) {
+            Serial.print("ERR SD write failed at chunk ");
+            Serial.println(c);
+            f.close();
+            sd.remove(name);
+            return false;
+        }
+
+        // Flush periodically so a 192 KB backlog never accumulates in FAT.
+        if (c % 6 == 5) f.flush();
+    }
+
+    f.close();
+
+    uint8_t sumBytes[4];
+    if (!readInto(sumBytes, 4, RX_TIMEOUT)) {
+        Serial.println("ERR timeout on checksum");
+        sd.remove(name);
+        return false;
+    }
+
+    uint32_t hostSum = (uint32_t)sumBytes[0]
+                     | ((uint32_t)sumBytes[1] << 8)
+                     | ((uint32_t)sumBytes[2] << 16)
+                     | ((uint32_t)sumBytes[3] << 24);
+
+    if (hostSum != sum) {
+        Serial.print("ERR checksum mismatch board ");
+        Serial.print(sum);
+        Serial.print(" host ");
+        Serial.println(hostSum);
+        sd.remove(name);
+        return false;
+    }
+
+    Serial.print("OK ");
+    Serial.print(name);
+    Serial.print(" ");
+    Serial.println(len);
+    return true;
+}
+
 
 /* ===========================================================================
  * COMMAND DISPATCH
@@ -893,6 +993,13 @@ static void handleLine(char *line) {
         case 'V': verifyHighOffsets(); break;
 
         case 'U': receiveImage((uint8_t)arg); break;
+
+        case 'W': {
+            const char *name = line + 1;
+            while (*name == ' ') name++;
+            sdReceive(name);
+            break;
+        }
 
         case 'M':
             sdList();
@@ -930,7 +1037,7 @@ static void handleLine(char *line) {
             break;
 
         default:
-            Serial.println("ERR unknown command (P L D X F V U M C CD)");
+            Serial.println("ERR unknown command (P L D X F V U W M C CD)");
             break;
     }
 }
@@ -949,7 +1056,7 @@ void setup(void) {
 
     Serial.println();
     Serial.println("ePaper gallery - raw QSPI flash + SD");
-    Serial.println("Commands: P L D<n> X<n> F V U<n> M C<name> <slot> CD<name>");
+    Serial.println("Commands: P L D<n> X<n> F V U<n> W<name> M C<name> <slot> CD<name>");
 
     if (!flash.begin(&EPAPER_FLASH)) {
         Serial.println("CRITICAL: QSPI flash init failed");
@@ -980,6 +1087,8 @@ void setup(void) {
         return;
     }
 
+    // SD after display init: each SdFat transaction reconfigures the shared
+    // SPI bus itself, so ordering only matters for who sets up first.
     Serial.print("SD card (CS=D4): ");
     if (sd.begin(SD_CS, SD_SCK_SPEED)) {
         sdOK = true;

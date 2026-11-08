@@ -38,6 +38,11 @@
   .cols { display:flex; gap:1.2rem; flex-wrap:wrap; }
   .cols > div { flex:1 1 320px; min-width:280px; }
   .hint { font-size:.78rem; color:var(--dim); margin:.3rem 0; }
+  /* drag-drop zone */
+  #dropZone { border:2px dashed #44445c; border-radius:10px; padding:1.2rem; text-align:center; color:var(--dim); font-size:.85rem; margin-bottom:.6rem; transition:border-color .2s, background .2s; cursor:pointer; }
+  #dropZone:hover { border-color:var(--acc); }
+  #dropZone.over { border-color:var(--acc); background:rgba(109,74,255,.08); color:var(--fg); }
+  #dropZone.hasFile { border-style:solid; border-color:var(--ok); color:var(--fg); }
   /* fullscreen viewer */
   #viewer { position:fixed; inset:0; background:rgba(0,0,0,.92); display:none; z-index:100; overflow:auto; padding:2rem; }
   #viewer.show { display:flex; align-items:flex-start; justify-content:center; }
@@ -48,13 +53,14 @@
 <body>
 
 <h1>ePaper Gallery <span>/ converter + uploader</span></h1>
-<div class="sub">Load an image → crop → quantise to Spectra 6 → upload to slot. 800×480, packed 4bpp.</div>
+<div class="sub">Drop a JPG/PNG → crop → quantise to Spectra 6 → upload to flash slot or SD card. 800×480, packed 4bpp.</div>
 
 <!-- ==================== IMAGE ==================== -->
 <div class="card">
   <h2>1 · Image</h2>
+  <div id="dropZone">drop a JPG / PNG here — or click to browse</div>
+  <input type="file" id="imgInput" accept="image/*" hidden>
   <div class="row">
-    <input type="file" id="imgInput" accept="image/*">
     <select id="fitMode" title="used when no crop is drawn">
       <option value="contain">no crop: contain (white letterbox)</option>
       <option value="cover">no crop: cover (centre-crop)</option>
@@ -63,11 +69,6 @@
     <button id="btnConvert" disabled>⚙ Convert &amp; preview</button>
     <button id="btnDownload" disabled>💾 Save .bin</button>
     <button id="btnSavePng" disabled>🖼 Save PNG</button>
-    <button id="btnUploadImg" disabled>⬆ Upload to slot</button>
-    <select id="slotSel">
-      <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
-      <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option>
-    </select>
   </div>
   <div class="hint">Drag on the left image to draw a crop rectangle. Right-click / double-click to clear it. With a crop, that region is stretched to 800×480. Without, the fit mode above applies.</div>
   <div class="cols">
@@ -103,6 +104,7 @@
   <div class="row">
     <button id="cmdP" disabled>P — probe</button>
     <button id="cmdL" disabled>L — list</button>
+    <button id="cmdM" disabled>M — list SD files</button>
     <button id="cmdV" disabled>V — verify flash</button>
     <button id="cmdF" class="danger" disabled>F — clear all</button>
     <label class="inline">D:</label>
@@ -114,8 +116,26 @@
   </div>
 </div>
 
+<!-- ==================== UPLOAD ==================== -->
 <div class="card">
-  <h2>Progress</h2>
+  <h2>3 · Upload</h2>
+  <div class="row">
+    <label class="inline">target:</label>
+    <label class="inline"><input type="radio" name="target" value="flash" checked> flash slot</label>
+    <label class="inline"><input type="radio" name="target" value="sd"> SD card</label>
+    <select id="slotSel">
+      <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
+      <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option>
+    </select>
+    <input type="text" id="sdName" placeholder="filename on SD (e.g. photo.4bpp)" style="width:15rem">
+    <button id="btnUpload" disabled>⬆ Upload</button>
+    <button id="btnUploadThenShow" disabled>⬆ Upload + display</button>
+  </div>
+  <div class="hint">
+    Flash target stores in one of 10 slots (survives without SD card). SD target writes
+    a file to the card (unlimited, name it above). At 115200 baud a full image takes
+    ~20 s regardless of target.
+  </div>
   <div id="progressWrap">
     <div id="progressBar"><div id="progressFill"></div></div>
     <div id="progressLabel">idle</div>
@@ -192,38 +212,73 @@ function flash(msg, cls) {
   flash._t = setTimeout(() => f.className = 'flash', 2500);
 }
 
+function sdTarget() { return document.querySelector('input[name=target]:checked').value === 'sd'; }
+
 function updateButtons() {
   const en = connected;
-  ['cmdP','cmdL','cmdV','cmdF','cmdD','cmdX'].forEach(id => $(id).disabled = !en || busy);
+  ['cmdP','cmdL','cmdM','cmdV','cmdF','cmdD','cmdX'].forEach(id => $(id).disabled = !en || busy);
   $('btnConnect').disabled = connected;
   $('btnDisconnect').disabled = !connected;
   $('btnConvert').disabled = !srcImg || busy;
   $('btnDownload').disabled = !convertedBytes;
   $('btnSavePng').disabled = !convertedBytes;
-  $('btnUploadImg').disabled = !en || !convertedBytes || busy;
+  const canUpload = en && !!convertedBytes && !busy && !(sdTarget() && !$('sdName').value.trim());
+  $('btnUpload').disabled = !canUpload;
+  $('btnUploadThenShow').disabled = !canUpload;
+  $('slotSel').disabled = !sdTarget();
+  $('sdName').disabled = !sdTarget();
 }
 
 // ================================================================
-// IMAGE PIPELINE
+// DRAG & DROP + FILE INPUT
 // ================================================================
 
-$('imgInput').onchange = () => {
-  const f = $('imgInput').files[0];
-  if (!f) return;
-  const url = URL.createObjectURL(f);
+function loadFile(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    log('not an image: ' + (file ? file.name : '?'), 'err');
+    return;
+  }
+  const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
     srcImg = img;
     cropRect = null;
     convertedBytes = null;
-    convertedName = f.name.replace(/\.[^.]+$/, '') || 'image';
+    convertedName = (file.name.replace(/\.[^.]+$/, '') || 'image').replace(/[^\w.-]/g, '_');
+    $('dropZone').classList.add('hasFile');
+    $('dropZone').textContent = `${file.name} (${img.width}×${img.height})`;
     drawSource();
-    log(`loaded "${f.name}" (${img.width}×${img.height})`);
+    log(`loaded "${file.name}" (${img.width}×${img.height})`);
     updateButtons();
   };
-  img.onerror = () => log('could not decode image', 'err');
+  img.onerror = () => log('could not decode image: ' + file.name, 'err');
   img.src = url;
-};
+}
+
+const dz = $('dropZone');
+dz.onclick = () => $('imgInput').click();
+$('imgInput').onchange = () => loadFile($('imgInput').files[0]);
+
+['dragenter', 'dragover'].forEach(ev =>
+  dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev =>
+  dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('over'); }));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+// also accept drops anywhere on the page
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f && !dz.contains(e.target)) loadFile(f);
+});
+
+// ================================================================
+// CROP OVERLAY
+// ================================================================
 
 function drawSource() {
   const c = $('srcCanvas');
@@ -234,8 +289,6 @@ function drawSource() {
   c.getContext('2d').drawImage(srcImg, 0, 0, c.width, c.height);
   drawOverlay();
 }
-
-// --- crop overlay ---
 
 function overlayScale() { return srcImg.width / $('srcCanvas').width; }
 
@@ -259,21 +312,21 @@ function drawOverlay() {
   ctx.strokeRect(x, y, w, h);
 }
 
-const ov = $('cropOverlay');
-ov.addEventListener('pointerdown', e => {
+const ovEl = $('cropOverlay');
+ovEl.addEventListener('pointerdown', e => {
   if (!srcImg) return;
-  const r = ov.getBoundingClientRect();
+  const r = ovEl.getBoundingClientRect();
   dragStart = {
-    px: (e.clientX - r.left) * (ov.width / r.width),
-    py: (e.clientY - r.top) * (ov.height / r.height),
+    px: (e.clientX - r.left) * (ovEl.width / r.width),
+    py: (e.clientY - r.top) * (ovEl.height / r.height),
   };
-  ov.setPointerCapture(e.pointerId);
+  ovEl.setPointerCapture(e.pointerId);
 });
-ov.addEventListener('pointermove', e => {
+ovEl.addEventListener('pointermove', e => {
   if (!dragStart) return;
-  const r = ov.getBoundingClientRect();
-  const px = (e.clientX - r.left) * (ov.width / r.width);
-  const py = (e.clientY - r.top) * (ov.height / r.height);
+  const r = ovEl.getBoundingClientRect();
+  const px = (e.clientX - r.left) * (ovEl.width / r.width);
+  const py = (e.clientY - r.top) * (ovEl.height / r.height);
   const s = overlayScale();
   cropRect = {
     x: Math.min(dragStart.px, px) * s,
@@ -283,7 +336,7 @@ ov.addEventListener('pointermove', e => {
   };
   drawOverlay();
 });
-ov.addEventListener('pointerup', () => {
+ovEl.addEventListener('pointerup', () => {
   if (cropRect && (cropRect.w < 8 || cropRect.h < 8)) cropRect = null;
   dragStart = null;
   drawOverlay();
@@ -291,10 +344,12 @@ ov.addEventListener('pointerup', () => {
     ? `crop: ${Math.round(cropRect.w)}×${Math.round(cropRect.h)} px`
     : 'crop cleared — fit mode applies');
 });
-ov.addEventListener('dblclick', () => { cropRect = null; drawOverlay(); });
-ov.addEventListener('contextmenu', e => { e.preventDefault(); cropRect = null; drawOverlay(); });
+ovEl.addEventListener('dblclick', () => { cropRect = null; drawOverlay(); });
+ovEl.addEventListener('contextmenu', e => { e.preventDefault(); cropRect = null; drawOverlay(); });
 
-// --- colour matching ---
+// ================================================================
+// COLOUR MATCHING + QUANTISATION
+// ================================================================
 
 function toLinear(c) { return (c / 255) ** 2.2; }
 
@@ -462,18 +517,14 @@ $('btnConvert').onclick = () => {
 
 // --- full-resolution viewer ---
 
-function openViewer() {
+$('resultCanvas').onclick = () => {
   if (!convertedBytes) return;
-  // draw the SAME quantised result at native 800×480 — no browser scaling
-  const src = $('resultCanvas');
   const vc = $('viewerCanvas');
   vc.width = IMG_W;
   vc.height = IMG_H;
-  vc.getContext('2d').drawImage(src, 0, 0);
+  vc.getContext('2d').drawImage($('resultCanvas'), 0, 0);
   $('viewer').classList.add('show');
-}
-$('resultCanvas').onclick = openViewer;
-
+};
 function closeViewer() { $('viewer').classList.remove('show'); }
 $('viewer').onclick = closeViewer;
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
@@ -620,7 +671,7 @@ async function sendCmd(cmd) {
 }
 
 // ================================================================
-// UPLOAD
+// UPLOAD  (U <n> → flash slot, W <name> → SD card)
 // ================================================================
 
 function byteSum(u8) {
@@ -631,14 +682,28 @@ function byteSum(u8) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function uploadBytes(label, buf) {
+async function uploadBytes(buf) {
   if (!connected || busy || !buf) return;
   if (buf.length !== IMG_BYTES) {
     flash(`internal error: payload is ${buf.length} bytes, need ${IMG_BYTES}`, 'err');
     return;
   }
+
+  const toSd = sdTarget();
+  let arg, cmd, describe;
+  if (toSd) {
+    const name = $('sdName').value.trim();
+    if (!name) { flash('enter a filename for the SD card', 'err'); return; }
+    arg = name;
+    cmd = `W ${name}`;
+    describe = `to SD as "${name}"`;
+  } else {
+    arg = $('slotSel').value;
+    cmd = `U ${arg}`;
+    describe = `to flash slot ${arg}`;
+  }
+
   busy = true; updateButtons();
-  const slot = parseInt($('slotSel').value, 10);
   const chunkSize = 4096, chunkDelay = 15;
   const blind = $('blindMode').checked;
   const sum = byteSum(buf);
@@ -647,17 +712,21 @@ async function uploadBytes(label, buf) {
   const prog = pct => { pf.style.width = pct + '%'; };
 
   try {
-    log(`uploading ${label} (${buf.length} bytes, sum=${sum}) to slot ${slot}${blind ? ' [blind]' : ''}…`);
+    log(`uploading ${buf.length} bytes (sum=${sum}) ${describe}${blind ? ' [blind]' : ''}…`);
 
-    await writeBytes(enc.encode(`U ${slot}\n`));
+    await writeBytes(enc.encode(cmd + '\n'));
 
     if (blind) {
-      prog(2); pl.textContent = 'waiting out erase (~3 s, no handshake)';
-      await sleep(3000);
+      prog(2); pl.textContent = toSd
+        ? 'waiting for card/file setup (~1.5 s, no handshake)'
+        : 'waiting out erase (~3 s, no handshake)';
+      await sleep(toSd ? 1500 : 3000);
     } else {
       await waitFor(/^READY/i, 5000, 'READY');
-      prog(2); pl.textContent = 'erasing… board needs ~2.5 s';
-      await sleep(2500);
+      prog(2); pl.textContent = toSd
+        ? 'writing file header…'
+        : 'erasing… board needs ~2.5 s';
+      await sleep(toSd ? 500 : 2500);
     }
 
     const dv = new DataView(new ArrayBuffer(4));
@@ -682,8 +751,8 @@ async function uploadBytes(label, buf) {
 
     if (blind) {
       prog(100); pl.textContent = 'done (blind)';
-      log('✔ blind upload finished — verify with D ' + slot + ' or P', 'ok');
-      flash('Blind upload sent. Verify with D ' + slot, 'ok');
+      log('✔ blind upload finished — verify with ' + (toSd ? 'M' : 'D ' + arg) + ' or P', 'ok');
+      flash('Blind upload sent. Verify with ' + (toSd ? 'M' : 'D ' + arg), 'ok');
     } else {
       const verdict = await waitFor(/^(OK|ERR)/, 60000, 'OK/ERR');
       prog(100); pl.textContent = 'done';
@@ -695,6 +764,8 @@ async function uploadBytes(label, buf) {
         flash('Upload failed: ' + verdict, 'err');
       }
     }
+
+    return { toSd, arg };
   } catch (e) {
     log('✖ upload aborted: ' + e.message, 'err');
     flash(e.message, 'err');
@@ -705,8 +776,22 @@ async function uploadBytes(label, buf) {
   }
 }
 
-$('btnUploadImg').onclick = () => {
-  if (convertedBytes) uploadBytes('"' + convertedName + '"', convertedBytes);
+$('btnUpload').onclick = async () => {
+  if (convertedBytes) await uploadBytes(convertedBytes);
+};
+
+$('btnUploadThenShow').onclick = async () => {
+  if (!convertedBytes) return;
+  const res = await uploadBytes(convertedBytes);
+  if (!res) return;
+  // After a successful upload, display what we sent. Blind mode can't confirm
+  // success, but a display attempt is harmless — the board validates the slot.
+  await sleep(res.toSd ? 2000 : 5000);
+  if (res.toSd) {
+    await sendCmd('CD ' + $('sdName').value.trim());
+  } else {
+    await sendCmd('D ' + res.arg);
+  }
 };
 
 // ================================================================
@@ -718,10 +803,14 @@ $('btnDisconnect').onclick = disconnect;
 $('btnClearLog').onclick = () => { $('log').innerHTML = ''; };
 $('cmdP').onclick = () => sendCmd('P');
 $('cmdL').onclick = () => sendCmd('L');
+$('cmdM').onclick = () => sendCmd('M');
 $('cmdV').onclick = () => sendCmd('V');
 $('cmdF').onclick = () => { if (confirm('Erase ALL stored images?')) sendCmd('F'); };
 $('cmdD').onclick = () => sendCmd('D ' + $('slotSelD').value);
 $('cmdX').onclick = () => sendCmd('X ' + $('slotSelX').value);
+
+document.querySelectorAll('input[name=target]').forEach(r => r.onchange = updateButtons);
+$('sdName').oninput = updateButtons;
 
 navigator.serial?.addEventListener?.('disconnect', ev => {
   if (ev.target === port) { log('device unplugged!', 'err'); disconnect(); }
