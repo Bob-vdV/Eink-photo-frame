@@ -2,825 +2,915 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ePaper Gallery — Image Converter & Uploader</title>
+<title>EN04 ePaper Uploader</title>
 <style>
-  :root { --bg:#16161e; --fg:#e6e6ec; --acc:#6d4aff; --ok:#3fb96b; --err:#e05555; --dim:#8b8b99; --card:#1f1f2a; }
-  * { box-sizing:border-box; }
-  body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--fg); margin:0; padding:1.5rem; max-width:980px; margin-inline:auto; }
-  h1 { font-size:1.3rem; margin:0 0 .2rem; }
-  h1 span { color:var(--acc); }
-  .sub { color:var(--dim); font-size:.85rem; margin-bottom:1.2rem; }
-  .card { background:var(--card); border-radius:10px; padding:1rem 1.2rem; margin-bottom:1rem; }
-  .card h2 { font-size:.95rem; margin:0 0 .8rem; color:var(--acc); text-transform:uppercase; letter-spacing:.05em; }
-  button { background:var(--acc); color:#fff; border:none; border-radius:6px; padding:.5rem 1rem; font-size:.85rem; cursor:pointer; margin:.15rem; }
-  button:hover:not(:disabled) { filter:brightness(1.15); }
-  button:disabled { opacity:.4; cursor:not-allowed; }
-  button.sec { background:#33334a; }
-  button.danger { background:#a03030; }
-  select, input[type=file], input[type=text] { background:#2a2a38; color:var(--fg); border:1px solid #44445c; border-radius:6px; padding:.45rem; font-size:.85rem; margin:.15rem; }
-  #log { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.75rem; background:#0e0e14; border:1px solid #2a2a3a; border-radius:8px; padding:.8rem; height:220px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; line-height:1.5; }
-  .status { font-size:.8rem; color:var(--dim); margin-left:.5rem; }
-  .row { display:flex; flex-wrap:wrap; align-items:center; gap:.3rem; margin:.4rem 0; }
-  label.inline { font-size:.85rem; color:var(--dim); }
-  input[type=number] { width:4.5rem; background:#2a2a38; color:var(--fg); border:1px solid #44445c; border-radius:6px; padding:.4rem; font-size:.85rem; }
-  .flash { position:fixed; top:1rem; right:1rem; padding:.6rem 1rem; border-radius:8px; font-size:.85rem; opacity:0; transition:opacity .3s; pointer-events:none; z-index:10; }
-  .flash.show { opacity:1; }
-  .flash.ok { background:var(--ok); color:#fff; }
-  .flash.err { background:var(--err); color:#fff; }
-  #progressWrap { display:none; margin-top:.6rem; }
-  #progressBar { width:100%; height:12px; background:#0e0e14; border-radius:6px; overflow:hidden; border:1px solid #2a2a3a; }
-  #progressFill { height:100%; width:0%; background:var(--acc); transition:width .15s; }
-  #progressLabel { font-size:.8rem; color:var(--dim); margin-top:.25rem; }
-  #cropWrap { position:relative; display:inline-block; max-width:100%; touch-action:none; }
-  #srcCanvas { max-width:100%; display:block; border:1px solid #44445c; border-radius:6px; }
-  #cropOverlay { position:absolute; inset:0; width:100%; height:100%; cursor:crosshair; }
-  #resultCanvas { max-width:100%; display:block; border:1px solid #44445c; border-radius:6px; image-rendering:pixelated; cursor:zoom-in; }
-  .cols { display:flex; gap:1.2rem; flex-wrap:wrap; }
-  .cols > div { flex:1 1 320px; min-width:280px; }
-  .hint { font-size:.78rem; color:var(--dim); margin:.3rem 0; }
-  /* drag-drop zone */
-  #dropZone { border:2px dashed #44445c; border-radius:10px; padding:1.2rem; text-align:center; color:var(--dim); font-size:.85rem; margin-bottom:.6rem; transition:border-color .2s, background .2s; cursor:pointer; }
-  #dropZone:hover { border-color:var(--acc); }
-  #dropZone.over { border-color:var(--acc); background:rgba(109,74,255,.08); color:var(--fg); }
-  #dropZone.hasFile { border-style:solid; border-color:var(--ok); color:var(--fg); }
-  /* fullscreen viewer */
-  #viewer { position:fixed; inset:0; background:rgba(0,0,0,.92); display:none; z-index:100; overflow:auto; padding:2rem; }
-  #viewer.show { display:flex; align-items:flex-start; justify-content:center; }
-  #viewerCanvas { image-rendering:pixelated; border:1px solid #444; flex:none; margin:auto; }
-  #viewerHint { position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); color:var(--dim); font-size:.8rem; background:#1f1f2a; padding:.4rem .9rem; border-radius:6px; }
+  :root { color-scheme: dark; }
+  body { font-family: system-ui, sans-serif; background: #16181d; color: #d7dae0; margin: 0; padding: 1rem; }
+  h1 { font-size: 1.15rem; margin: 0 0 1rem; }
+  h2 { font-size: 1rem; margin: 1.2rem 0 0.6rem; border-bottom: 1px solid #333; padding-bottom: 0.25rem; }
+  #drop { border: 2px dashed #555; border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  #drop.over { border-color: #6d4aff; background: rgba(109,74,255,.08); }
+  canvas { max-width: 100%; background: #fff; border-radius: 4px; margin-top: .5rem; }
+  .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin: .35rem 0; }
+  label { font-size: .85rem; }
+  select, input[type=text], input[type=number] { background: #23262d; color: #eee; border: 1px solid #444; border-radius: 4px; padding: .3rem .45rem; }
+  button { background: #2b2f37; color: #eee; border: 1px solid #4a4f59; border-radius: 5px; padding: .35rem .7rem; cursor: pointer; }
+  button:hover { background: #353a44; }
+  button.primary { background: #6d4aff; border-color: #6d4aff; color: #fff; }
+  button.primary:hover { background: #7d5aff; }
+  button.danger:hover { background: #7a2b2b; border-color: #a33; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  #log { background: #0e1013; border: 1px solid #2b2f37; border-radius: 6px; padding: .6rem; height: 220px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: .78rem; white-space: pre-wrap; }
+  .rx { color: #7fd188; }
+  .tx { color: #e0a35d; }
+  .err { color: #e06c6c; }
+  .ok { color: #7fd188; font-weight: bold; }
+  .info { color: #9aa1ad; }
+  .msg { color: #6ea8fe; }
+  #previewWrap { margin-top: .5rem; position: relative; }
+  #progressBar { height: 6px; background: #2b2f37; border-radius: 3px; overflow: hidden; margin: .5rem 0; display: none; }
+  #progressFill { height: 100%; width: 0%; background: #6d4aff; transition: width .12s linear; }
+  .small { font-size: .8rem; color: #9aa1ad; }
+  #viewer { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none; z-index: 10; justify-content: center; align-items: center; flex-direction: column; }
+  #viewer img { max-width: 96vw; max-height: 90vh; image-rendering: pixelated; cursor: zoom-out; }
+  fieldset { border: 1px solid #333; border-radius: 6px; margin: .4rem 0; }
+
+  #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .7rem; margin-top: .5rem; }
+  .card { background: #1d2026; border: 2px solid #2b2f37; border-radius: 8px; padding: .5rem; }
+  .card.current { border-color: #6d4aff; }
+  .card.bad { opacity: .55; }
+  .card canvas { width: 100%; aspect-ratio: 800 / 480; margin: 0 0 .4rem; display: block; background: #2b2f37; }
+  .card .name { font-size: .82rem; word-break: break-all; margin-bottom: .35rem; }
+  .card .badge { font-size: .7rem; background: #6d4aff; color: #fff; border-radius: 3px; padding: 0 .3rem; margin-left: .3rem; }
+  .card .row { margin: 0; gap: .35rem; }
+  .card button { padding: .25rem .5rem; font-size: .8rem; }
+
+  .bulkrow { display: flex; gap: .8rem; justify-content: space-between; font-size: .82rem; padding: .2rem 0; border-bottom: 1px solid #2b2f37; }
+  .bulkrow .st-done { color: #7fd188; }
+  .bulkrow .st-failed { color: #e06c6c; }
+  .bulkrow .st-skipped { color: #9aa1ad; }
+  .bulkrow .st-uploading, .bulkrow .st-converting { color: #6ea8fe; }
+  #bulkList { max-height: 260px; overflow-y: auto; margin-top: .4rem; }
 </style>
 </head>
 <body>
+<h1>EN04 ePaper — image uploader &amp; converter</h1>
 
-<h1>ePaper Gallery <span>/ converter + uploader</span></h1>
-<div class="sub">Drop a JPG/PNG → crop → quantise to Spectra 6 → upload to flash slot or SD card. 800×480, packed 4bpp.</div>
-
-<!-- ==================== IMAGE ==================== -->
-<div class="card">
-  <h2>1 · Image</h2>
-  <div id="dropZone">drop a JPG / PNG here — or click to browse</div>
-  <input type="file" id="imgInput" accept="image/*" hidden>
-  <div class="row">
-    <select id="fitMode" title="used when no crop is drawn">
-      <option value="contain">no crop: contain (white letterbox)</option>
-      <option value="cover">no crop: cover (centre-crop)</option>
-      <option value="stretch">no crop: stretch</option>
-    </select>
-    <button id="btnConvert" disabled>⚙ Convert &amp; preview</button>
-    <button id="btnDownload" disabled>💾 Save .bin</button>
-    <button id="btnSavePng" disabled>🖼 Save PNG</button>
-  </div>
-  <div class="hint">Drag on the left image to draw a crop rectangle. Right-click / double-click to clear it. With a crop, that region is stretched to 800×480. Without, the fit mode above applies.</div>
-  <div class="cols">
-    <div>
-      <div class="hint">source (draw crop here)</div>
-      <div id="cropWrap">
-        <canvas id="srcCanvas"></canvas>
-        <canvas id="cropOverlay"></canvas>
-      </div>
-    </div>
-    <div>
-      <div class="hint">quantised result (800×480, 6 colours) — click to view at full resolution</div>
-      <canvas id="resultCanvas" width="800" height="480"></canvas>
-      <div class="row" style="margin-top:.4rem">
-        <label class="inline"><input type="checkbox" id="dither" checked> Floyd-Steinberg dither</label>
-        <label class="inline"><input type="checkbox" id="serpentine" checked> serpentine scan</label>
-        <label class="inline"><input type="checkbox" id="linearLight"> match in linear light</label>
-        <label class="inline">strength <input type="number" id="ditherStrength" value="1.0" min="0.4" max="1.5" step="0.1" title="1.0 = classic FS; lower = calmer, higher = grainier"></label>
-      </div>
-    </div>
-  </div>
+<h2>1 · Connect</h2>
+<div class="row">
+  <button id="btnConnect">🔌 Connect</button>
+  <span id="connState" class="small">not connected</span>
+  <label><input type="checkbox" id="blindMode"> blind mode (skip READY handshake)</label>
 </div>
 
-<!-- ==================== SERIAL ==================== -->
-<div class="card">
-  <h2>2 · Serial</h2>
-  <div class="row">
-    <button id="btnConnect">🔌 Connect</button>
-    <button id="btnDisconnect" class="sec" disabled>Disconnect</button>
-    <span class="status" id="connStatus">not connected</span>
-    <span id="stats" class="status">0 bytes rx</span>
-  </div>
-  <div class="row">
-    <button id="cmdP" disabled>P — probe</button>
-    <button id="cmdL" disabled>L — list</button>
-    <button id="cmdM" disabled>M — list SD files</button>
-    <button id="cmdV" disabled>V — verify flash</button>
-    <button id="cmdF" class="danger" disabled>F — clear all</button>
-    <label class="inline">D:</label>
-    <select id="slotSelD"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
-    <button id="cmdD" disabled>display</button>
-    <label class="inline">X:</label>
-    <select id="slotSelX"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select>
-    <button id="cmdX" disabled>blank</button>
-  </div>
+<h2>2 · Load image</h2>
+<div id="drop">drop a JPG / PNG here, or click to browse<br><span class="small">(drag &amp; drop anywhere on the page works too)</span></div>
+<input type="file" id="fileInput" accept="image/*" multiple hidden>
+<div id="previewWrap"><canvas id="canvas"></canvas></div>
+<div class="row">
+  <label>fit <select id="fitMode">
+    <option value="contain">contain</option>
+    <option value="cover">cover</option>
+    <option value="stretch">stretch</option>
+  </select></label>
+  <label>dither strength <input type="range" id="ditherStrength" min="0" max="2" step="0.1" value="1"></label>
+  <label><input type="checkbox" id="gammaMatch"> gamma-linear colour match</label>
+  <button id="btnConvert">Convert</button>
+  <button id="btnView" disabled>🔍 full-res preview</button>
+  <button id="btnSave" disabled>💾 Save .bin</button>
+  <span id="convertInfo" class="small"></span>
 </div>
 
-<!-- ==================== UPLOAD ==================== -->
-<div class="card">
-  <h2>3 · Upload</h2>
+<h2>3 · Upload to SD card</h2>
+<fieldset>
   <div class="row">
-    <label class="inline">target:</label>
-    <label class="inline"><input type="radio" name="target" value="flash" checked> flash slot</label>
-    <label class="inline"><input type="radio" name="target" value="sd"> SD card</label>
-    <select id="slotSel">
-      <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
-      <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option>
-    </select>
-    <input type="text" id="sdName" placeholder="filename on SD (e.g. photo.4bpp)" style="width:15rem">
-    <button id="btnUpload" disabled>⬆ Upload</button>
-    <button id="btnUploadThenShow" disabled>⬆ Upload + display</button>
-  </div>
-  <div class="hint">
-    Flash target stores in one of 10 slots (survives without SD card). SD target writes
-    a file to the card (unlimited, name it above). At 115200 baud a full image takes
-    ~20 s regardless of target.
-  </div>
-  <div id="progressWrap">
-    <div id="progressBar"><div id="progressFill"></div></div>
-    <div id="progressLabel">idle</div>
+    <label>filename <input type="text" id="sdName" placeholder="filename" value="img1" size="22"></label>
+    <span class="small">(.4bpp is added automatically)</span>
   </div>
   <div class="row">
-    <label class="inline" title="skip waiting for READY/OK — use when the browser cannot receive serial data">
-      <input type="checkbox" id="blindMode" checked> blind upload (no replies expected)
-    </label>
+    <label>chunk <input type="number" id="chunkSize" value="2048" min="512" max="8192" step="512" size="5"></label>
+    <label>delay <input type="number" id="chunkDelay" value="25" min="0" max="200" size="4"> ms</label>
+    <button id="btnUpload" class="primary" disabled>⬆ Upload</button>
+    <label class="small"><input type="checkbox" id="autoDisplay" checked> display after upload</label>
   </div>
-  <div id="log"></div>
-  <div class="row">
-    <button id="btnClearLog" class="sec">Clear log</button>
-    <label class="inline"><input type="checkbox" id="hexMode"> show raw hex</label>
-  </div>
-</div>
+</fieldset>
+<div id="progressBar"><div id="progressFill"></div></div>
 
-<!-- fullscreen viewer -->
-<div id="viewer">
-  <canvas id="viewerCanvas" width="800" height="480"></canvas>
-  <div id="viewerHint">full resolution 800×480 — click anywhere or press Esc to close</div>
+<h2>3b · Bulk upload</h2>
+<div class="row">
+  <button id="btnBulkAdd">➕ Add images…</button>
+  <input type="file" id="bulkInput" accept="image/*" multiple hidden>
+  <label>if name exists
+    <select id="bulkPolicy">
+      <option value="skip">skip</option>
+      <option value="overwrite">overwrite</option>
+      <option value="rename">keep both (rename)</option>
+    </select></label>
+  <button id="btnBulkStart" class="primary" disabled>⬆ Upload all</button>
+  <button id="btnBulkCancel" disabled>Cancel</button>
+  <button id="btnBulkClear">Clear list</button>
+  <span id="bulkInfo" class="small"></span>
 </div>
+<div id="bulkList"></div>
+<div class="small">Uses the fit / dither / gamma settings from section 2. Files are named after the originals. You can also drop several images anywhere on the page.</div>
 
-<div class="flash" id="flash"></div>
+<h2>4 · SD card gallery</h2>
+<div class="row">
+  <button id="btnM" disabled>↻ Refresh list</button>
+  <button id="btnReloadThumbs" disabled>↻ Reload previews</button>
+  <label class="small"><input type="checkbox" id="autoThumbs" checked> auto-load previews</label>
+  <span id="galleryInfo" class="small"></span>
+</div>
+<div id="gallery"><span class="small">connect to the board to see the SD card</span></div>
+
+<h2>5 · Board controls</h2>
+<div class="row">
+  <button id="btnPrev" disabled>⏮ previous</button>
+  <button id="btnNext" disabled>⏭ next</button>
+  <button id="btnRand" disabled>🎲 random</button>
+  <button id="btnP" disabled>P — probe</button>
+  <label>auto-change every <input type="number" id="autoMin" value="60" min="0" max="1440" size="5"> min (0 = off)</label>
+  <button id="btnAuto" disabled>Set</button>
+</div>
+<div class="row">
+  <input type="text" id="customCmd" placeholder="custom command, e.g. CD linus1.4bpp" size="34" disabled>
+  <button id="btnSend" disabled>Send ⏎</button>
+</div>
+<div class="small">Showing an image on the panel takes ~20–30 s; the page waits for the board.</div>
+
+<h2>Log</h2>
+<div id="log"></div>
+
+<div id="viewer"><img id="viewerImg" alt=""><div class="small" style="margin-top:.5rem">click anywhere to close</div></div>
 
 <script>
 'use strict';
 
-const IMG_W = 800, IMG_H = 480;
-const IMG_BYTES = IMG_W * IMG_H / 2;         // 192000
-const BAUD = 115200;
+// ---------------------------------------------------------------- constants
+const IMG_W = 800, IMG_H = 480, IMG_BYTES = 192000;
+const PALETTE = [
+  { idx: 0x0, rgb: [255,255,255], name: 'white'  },
+  { idx: 0x1, rgb: [0,0,0],       name: 'black'  },
+  { idx: 0x2, rgb: [58,126,72],   name: 'green'  },
+  { idx: 0x6, rgb: [186,49,57],   name: 'red'    },
+  { idx: 0xB, rgb: [255,214,61],  name: 'yellow' },
+  { idx: 0xD, rgb: [39,68,156],   name: 'blue'   },
+];
+const PAL_BY_IDX = {};
+PALETTE.forEach(p => PAL_BY_IDX[p.idx] = p.rgb);
+const GAMMA = 2.2;
+const PALETTE_LIN = PALETTE.map(p =>
+  ({ idx: p.idx, rgb: p.rgb.map(v => Math.pow(v/255, GAMMA)), name: p.name }));
 
-// Spectra 6 palette — index: sRGB approximation.
-// Adjust after running the --calibrate pattern if your panel maps differently.
-const PALETTE = {
-  0x0: [255, 255, 255],   // white
-  0x1: [0, 0, 0],         // black
-  0x2: [58, 126, 72],     // green
-  0x6: [186, 49, 57],     // red
-  0xb: [255, 214, 61],    // yellow
-  0xd: [39, 68, 156],     // blue
-};
+let port = null, reader = null, writer = null;
+let readAbort = null;          // single-slot line handler, set by the current request
+let binReq = null;             // {need, cb}: next bytes are binary, not lines
+let imgBitmap = null;
+let convertedBytes = null;
+let uploading = false;
 
-// ---------------- state ----------------
-
-let port = null, reader = null, connected = false, busy = false;
-let pendingLines = [], lineWaiters = [], lineBuf = '', bytesTotal = 0;
-
-let srcImg = null;
-let convertedBytes = null;    // Uint8Array(192000)
-let convertedName = 'image';
-
-let cropRect = null;
-let dragStart = null;
+let files = [];                // [{name, size}] from last M
+let currentName = null;        // image currently on the panel (from CUR / OK shown)
+const cache = new Map();       // name -> Uint8Array(192000)
+let listGen = 0;
+let bulkQueue = [];            // {file, state, msg}
+let bulkRunning = false, bulkCancel = false;
 
 const $ = id => document.getElementById(id);
-const enc = new TextEncoder();
-const dec = new TextDecoder();
+const CONN_BTNS = ['btnP','btnM','btnReloadThumbs','btnPrev','btnNext','btnRand','btnAuto','btnSend','customCmd'];
 
-function log(msg, cls) {
-  const el = $('log');
+// ------------------------------------------------------------------- logging
+function log(text, cls) {
   const t = new Date().toTimeString().slice(0, 8);
-  const span = document.createElement('span');
-  span.textContent = `[${t}] ${msg}\n`;
-  if (cls) span.style.color = cls === 'err' ? 'var(--err)' : cls === 'ok' ? 'var(--ok)' : '';
-  el.appendChild(span);
-  while (el.childNodes.length > 500) el.removeChild(el.firstChild);
-  el.scrollTop = el.scrollHeight;
-}
-function flash(msg, cls) {
-  const f = $('flash');
-  f.textContent = msg;
-  f.className = 'flash show ' + cls;
-  clearTimeout(flash._t);
-  flash._t = setTimeout(() => f.className = 'flash', 2500);
+  const div = document.createElement('div');
+  if (cls) div.className = cls;
+  div.textContent = `[${t}] ${text}`;
+  $('log').appendChild(div);
+  while ($('log').childNodes.length > 500) $('log').removeChild($('log').firstChild);
+  $('log').scrollTop = $('log').scrollHeight;
 }
 
-function sdTarget() { return document.querySelector('input[name=target]:checked').value === 'sd'; }
-
-function updateButtons() {
-  const en = connected;
-  ['cmdP','cmdL','cmdM','cmdV','cmdF','cmdD','cmdX'].forEach(id => $(id).disabled = !en || busy);
-  $('btnConnect').disabled = connected;
-  $('btnDisconnect').disabled = !connected;
-  $('btnConvert').disabled = !srcImg || busy;
-  $('btnDownload').disabled = !convertedBytes;
-  $('btnSavePng').disabled = !convertedBytes;
-  const canUpload = en && !!convertedBytes && !busy && !(sdTarget() && !$('sdName').value.trim());
-  $('btnUpload').disabled = !canUpload;
-  $('btnUploadThenShow').disabled = !canUpload;
-  $('slotSel').disabled = !sdTarget();
-  $('sdName').disabled = !sdTarget();
+// ------------------------------------------------- command serialisation lock
+// Every request that expects a reply goes through locked() so replies from
+// different requests never interleave on the single serial stream.
+let chain = Promise.resolve();
+function locked(fn) {
+  const run = chain.then(() => fn());
+  chain = run.catch(() => {});
+  return run;
 }
 
-// ================================================================
-// DRAG & DROP + FILE INPUT
-// ================================================================
+// ----------------------------------------------------------------- serial io
+let rxBuf = new Uint8Array(65536), rxLen = 0;
+const lineDecoder = new TextDecoder();
 
-function loadFile(file) {
-  if (!file || !file.type.startsWith('image/')) {
-    log('not an image: ' + (file ? file.name : '?'), 'err');
-    return;
+function rxPush(bytes) {
+  if (rxLen + bytes.length > rxBuf.length) {
+    const nb = new Uint8Array(Math.max(rxBuf.length * 2, rxLen + bytes.length));
+    nb.set(rxBuf.subarray(0, rxLen));
+    rxBuf = nb;
   }
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.onload = () => {
-    srcImg = img;
-    cropRect = null;
-    convertedBytes = null;
-    convertedName = (file.name.replace(/\.[^.]+$/, '') || 'image').replace(/[^\w.-]/g, '_');
-    $('dropZone').classList.add('hasFile');
-    $('dropZone').textContent = `${file.name} (${img.width}×${img.height})`;
-    drawSource();
-    log(`loaded "${file.name}" (${img.width}×${img.height})`);
-    updateButtons();
-  };
-  img.onerror = () => log('could not decode image: ' + file.name, 'err');
-  img.src = url;
+  rxBuf.set(bytes, rxLen);
+  rxLen += bytes.length;
+}
+function rxConsume(n) {
+  rxBuf.copyWithin(0, n, rxLen);
+  rxLen -= n;
 }
 
-const dz = $('dropZone');
-dz.onclick = () => $('imgInput').click();
-$('imgInput').onchange = () => loadFile($('imgInput').files[0]);
-
-['dragenter', 'dragover'].forEach(ev =>
-  dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
-['dragleave', 'drop'].forEach(ev =>
-  dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('over'); }));
-dz.addEventListener('drop', e => {
-  e.preventDefault();
-  const f = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (f) loadFile(f);
-});
-// also accept drops anywhere on the page
-window.addEventListener('dragover', e => e.preventDefault());
-window.addEventListener('drop', e => {
-  e.preventDefault();
-  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-  if (f && !dz.contains(e.target)) loadFile(f);
-});
-
-// ================================================================
-// CROP OVERLAY
-// ================================================================
-
-function drawSource() {
-  const c = $('srcCanvas');
-  const MAXW = 440;
-  const scale = Math.min(1, MAXW / srcImg.width);
-  c.width = Math.round(srcImg.width * scale);
-  c.height = Math.round(srcImg.height * scale);
-  c.getContext('2d').drawImage(srcImg, 0, 0, c.width, c.height);
-  drawOverlay();
-}
-
-function overlayScale() { return srcImg.width / $('srcCanvas').width; }
-
-function drawOverlay() {
-  const ov = $('cropOverlay');
-  const c = $('srcCanvas');
-  ov.width = c.width;
-  ov.height = c.height;
-  const ctx = ov.getContext('2d');
-  ctx.clearRect(0, 0, ov.width, ov.height);
-  if (!cropRect) return;
-  const x = cropRect.x / overlayScale(), y = cropRect.y / overlayScale();
-  const w = cropRect.w / overlayScale(), h = cropRect.h / overlayScale();
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.beginPath();
-  ctx.rect(0, 0, ov.width, ov.height);
-  ctx.rect(x, y, w, h);
-  ctx.fill('evenodd');
-  ctx.strokeStyle = '#6d4aff';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x, y, w, h);
-}
-
-const ovEl = $('cropOverlay');
-ovEl.addEventListener('pointerdown', e => {
-  if (!srcImg) return;
-  const r = ovEl.getBoundingClientRect();
-  dragStart = {
-    px: (e.clientX - r.left) * (ovEl.width / r.width),
-    py: (e.clientY - r.top) * (ovEl.height / r.height),
-  };
-  ovEl.setPointerCapture(e.pointerId);
-});
-ovEl.addEventListener('pointermove', e => {
-  if (!dragStart) return;
-  const r = ovEl.getBoundingClientRect();
-  const px = (e.clientX - r.left) * (ovEl.width / r.width);
-  const py = (e.clientY - r.top) * (ovEl.height / r.height);
-  const s = overlayScale();
-  cropRect = {
-    x: Math.min(dragStart.px, px) * s,
-    y: Math.min(dragStart.py, py) * s,
-    w: Math.abs(px - dragStart.px) * s,
-    h: Math.abs(py - dragStart.py) * s,
-  };
-  drawOverlay();
-});
-ovEl.addEventListener('pointerup', () => {
-  if (cropRect && (cropRect.w < 8 || cropRect.h < 8)) cropRect = null;
-  dragStart = null;
-  drawOverlay();
-  log(cropRect
-    ? `crop: ${Math.round(cropRect.w)}×${Math.round(cropRect.h)} px`
-    : 'crop cleared — fit mode applies');
-});
-ovEl.addEventListener('dblclick', () => { cropRect = null; drawOverlay(); });
-ovEl.addEventListener('contextmenu', e => { e.preventDefault(); cropRect = null; drawOverlay(); });
-
-// ================================================================
-// COLOUR MATCHING + QUANTISATION
-// ================================================================
-
-function toLinear(c) { return (c / 255) ** 2.2; }
-
-const palKeys = Object.keys(PALETTE).map(k => parseInt(k, 10));
-const palSRGB = {}, palLin = {};
-for (const k of palKeys) {
-  palSRGB[k] = PALETTE[k];
-  palLin[k] = PALETTE[k].map(toLinear);
-}
-
-const memo = new Map();
-function nearestIndex(r, g, b, linear) {
-  const key = (((r * 256 + g) * 256 + b) * 2) + (linear ? 1 : 0);
-  const hit = memo.get(key);
-  if (hit !== undefined) return hit;
-  let tr, tg, tb, table;
-  if (linear) {
-    tr = toLinear(r); tg = toLinear(g); tb = toLinear(b);
-    table = palLin;
-  } else {
-    tr = r; tg = g; tb = b;
-    table = palSRGB;
+// Parse the receive buffer: binary blocks when a request asked for them,
+// otherwise newline-terminated text lines. Handlers run synchronously, so a
+// handler may register binReq before the next bytes are parsed.
+function drain() {
+  while (true) {
+    if (binReq) {
+      if (rxLen < binReq.need) return;
+      const data = rxBuf.slice(0, binReq.need);
+      rxConsume(binReq.need);
+      const r = binReq; binReq = null;
+      r.cb(data);
+      continue;
+    }
+    const nl = rxBuf.subarray(0, rxLen).indexOf(10);
+    if (nl < 0) return;
+    const line = lineDecoder.decode(rxBuf.slice(0, nl)).replace(/\r$/, '');
+    rxConsume(nl + 1);
+    if (line.length) onLine(line);
   }
-  let bestK = palKeys[0], bestD = Infinity;
-  for (const k of palKeys) {
-    const [pr, pg, pb] = table[k];
-    const d = (tr - pr) ** 2 + (tg - pg) ** 2 + (tb - pb) ** 2;
-    if (d < bestD) { bestD = d; bestK = k; }
-  }
-  memo.set(key, bestK);
-  return bestK;
 }
 
-// --- fit / crop → 800×480 RGBA (fully opaque; never transparent) ---
+function onLine(line) {
+  log('◀ ' + line, line.startsWith('ERR') ? 'err' : (line.startsWith('OK') ? 'ok' : 'rx'));
+  if (readAbort) readAbort(line);
+}
 
-function toDisplayRGBA() {
-  const cv = new OffscreenCanvas(IMG_W, IMG_H);
-  const ctx = cv.getContext('2d', { willReadFrequently: true, alpha: false });
+async function connect() {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    writer = port.writable.getWriter();
+    if (port.setSignals) { try { await port.setSignals({ dataTerminalReady: true, requestToSend: true }); } catch(e){} }
+    rxLen = 0; binReq = null; readAbort = null;
+    startReader();
+    $('connState').textContent = 'connected';
+    CONN_BTNS.forEach(b => $(b).disabled = false);
+    updateUploadEnabled();
+    log('serial port opened', 'info');
+    setTimeout(refreshList, 400);
+  } catch (e) {
+    log('connect failed: ' + e.message, 'err');
+  }
+}
 
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, IMG_W, IMG_H);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+async function disconnect() {
+  try { if (reader) await reader.cancel(); } catch(e){}
+  try { if (writer) { writer.releaseLock(); writer = null; } } catch(e){}
+  try { if (port) await port.close(); } catch(e){}
+  port = null; reader = null; listGen++;
+  $('connState').textContent = 'not connected';
+  CONN_BTNS.forEach(b => $(b).disabled = true);
+  updateUploadEnabled();
+  log('serial port closed', 'info');
+}
 
-  if (cropRect && cropRect.w >= 8 && cropRect.h >= 8) {
-    ctx.drawImage(srcImg, cropRect.x, cropRect.y, cropRect.w, cropRect.h, 0, 0, IMG_W, IMG_H);
-  } else {
-    const mode = $('fitMode').value;
-    const sw = srcImg.width, sh = srcImg.height;
-    if (mode === 'stretch') {
-      ctx.drawImage(srcImg, 0, 0, IMG_W, IMG_H);
-    } else if (mode === 'cover') {
-      const scale = Math.max(IMG_W / sw, IMG_H / sh);
-      const nw = sw * scale, nh = sh * scale;
-      ctx.drawImage(srcImg, (IMG_W - nw) / 2, (IMG_H - nh) / 2, nw, nh);
-    } else { // contain
-      const scale = Math.min(IMG_W / sw, IMG_H / sh);
-      const nw = sw * scale, nh = sh * scale;
-      ctx.drawImage(srcImg, (IMG_W - nw) / 2, (IMG_H - nh) / 2, nw, nh);
+function startReader() {
+  const pump = async () => {
+    while (port && port.readable) {
+      reader = port.readable.getReader();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          rxPush(value);
+          drain();
+        }
+      } catch (e) {
+        log('read error: ' + e.message, 'err');
+      } finally {
+        try { reader.releaseLock(); } catch(e){}
+      }
+      if (!port || !port.readable) break;
+    }
+  };
+  pump();
+}
+
+async function writeLine(cmd) {
+  if (!writer) { log('not connected', 'err'); return; }
+  log('▶ ' + cmd, 'tx');
+  await writer.write(new TextEncoder().encode(cmd + '\n'));
+}
+async function writeBytes(bytes) { await writer.write(bytes); }
+
+// Resolve with the first line matching `re` (or any ERR line), null on timeout.
+// Installs its handler synchronously, so create it BEFORE sending the command.
+function waitForLine(re, timeoutMs) {
+  return new Promise(resolve => {
+    const t = setTimeout(() => { readAbort = null; resolve(null); }, timeoutMs);
+    readAbort = line => {
+      if (re.test(line) || /^ERR/.test(line)) { clearTimeout(t); readAbort = null; resolve(line); }
+    };
+  });
+}
+
+// Collect every line up to and including the first one matching `re`.
+function collectLines(re, timeoutMs) {
+  return new Promise(resolve => {
+    const acc = [];
+    const t = setTimeout(() => { readAbort = null; resolve(null); }, timeoutMs);
+    readAbort = line => {
+      acc.push(line);
+      if (re.test(line)) { clearTimeout(t); readAbort = null; resolve(acc); }
+    };
+  });
+}
+
+async function request(cmd, re, timeoutMs) {
+  const w = waitForLine(re, timeoutMs);
+  await writeLine(cmd);
+  return w;
+}
+
+function checksum(bytes) {
+  let s = 0;
+  for (let i = 0; i < bytes.length; i++) s += bytes[i];
+  return s >>> 0;
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ------------------------------------------------------- SD card operations
+// G <name>: "DATA n\n" + n bytes + u32 LE sum + "OK name\n"
+function fetchImage(name) {
+  return new Promise((resolve, reject) => {
+    const fail = e => { clearTimeout(timer); readAbort = null; binReq = null; rxLen = 0; reject(e); };
+    const timer = setTimeout(() => fail(new Error('timeout fetching ' + name)), 30000);
+    readAbort = line => {
+      let m;
+      if (/^ERR/.test(line)) { fail(new Error(line)); return; }
+      if ((m = line.match(/^DATA (\d+)/))) {
+        const len = +m[1];
+        binReq = { need: len + 4, cb: data => {
+          const img = data.subarray(0, len);
+          const sum = new DataView(data.buffer, data.byteOffset + len, 4).getUint32(0, true);
+          if (checksum(img) !== sum) { fail(new Error('checksum mismatch')); return; }
+          // swallow the trailing "OK <name>" line so it can't answer the next request
+          readAbort = l => { if (/^(OK|ERR)/.test(l)) { clearTimeout(timer); readAbort = null; resolve(img); } };
+        }};
+      }
+    };
+    writeLine('G ' + name);
+  });
+}
+
+function refreshList() {
+  if (!port) return Promise.resolve();
+  return locked(async () => {
+    const w = collectLines(/^(END|ERR)/, 8000);
+    await writeLine('M');
+    const lines = await w;
+    if (!lines || /^ERR/.test(lines[lines.length - 1])) {
+      log('could not list SD card', 'err');
+      return;
+    }
+    files = [];
+    currentName = null;
+    for (const l of lines) {
+      let m;
+      if ((m = l.match(/^FILE (\d+) (.+)$/))) files.push({ name: m[2], size: +m[1] });
+      else if ((m = l.match(/^CUR (.+)$/))) currentName = m[1];
+    }
+    files.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    renderGallery();
+    loadThumbs(++listGen);
+  });
+}
+
+async function removeFile(name) {
+  if (!confirm(`Delete "${name}" from the SD card?`)) return;
+  const res = await locked(() => request('R ' + name, /^OK/, 8000));
+  if (res && /^OK/.test(res)) cache.delete(name);
+  await refreshList();
+}
+
+// Show on panel (CD / N / B / Z). Waits for the refresh to finish.
+function displayCmd(cmd) {
+  return locked(async () => {
+    log('refreshing panel, this takes a while…', 'info');
+    const res = await request(cmd, /^OK shown/, 120000);
+    let m;
+    if (res && (m = res.match(/^OK shown (.+) in \d+ ms$/))) {
+      currentName = m[1];
+      markCurrent();
+    } else if (!res) {
+      log('no answer from board (timeout)', 'err');
+    }
+  });
+}
+
+async function ensureBytes(name) {
+  if (cache.has(name)) return cache.get(name);
+  const bytes = await locked(() => fetchImage(name));
+  cache.set(name, bytes);
+  drawThumb(name);
+  return bytes;
+}
+
+async function loadThumbs(gen) {
+  if (!$('autoThumbs').checked) return;
+  for (const f of files) {
+    if (gen !== listGen || !port) return;
+    if (f.size !== IMG_BYTES || cache.has(f.name)) continue;
+    try { await ensureBytes(f.name); }
+    catch (e) { log('preview failed for ' + f.name + ': ' + e.message, 'err'); }
+  }
+}
+
+// ------------------------------------------------------------------- gallery
+function decodeToCanvas(bytes, canvas) {
+  canvas.width = IMG_W; canvas.height = IMG_H;
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const id = ctx.createImageData(IMG_W, IMG_H);
+  const d = id.data;
+  for (let i = 0, p = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    for (let s = 4; s >= 0; s -= 4) {           // high nibble = left pixel
+      const c = PAL_BY_IDX[(b >> s) & 0xF] || [255, 0, 255];
+      d[p++] = c[0]; d[p++] = c[1]; d[p++] = c[2]; d[p++] = 255;
     }
   }
-  return ctx.getImageData(0, 0, IMG_W, IMG_H);
+  ctx.putImageData(id, 0, 0);
 }
 
-// --- quantise (Floyd–Steinberg, serpentine, strength control) ---
+function cardFor(name) {
+  return [...$('gallery').children].find(c => c.dataset && c.dataset.name === name);
+}
 
-function quantise(imgData) {
-  const w = IMG_W, h = IMG_H;
-  const dither = $('dither').checked;
-  const serp = $('serpentine').checked;
-  const linear = $('linearLight').checked;
-  const strength = parseFloat($('ditherStrength').value) || 1.0;
+function drawThumb(name) {
+  const card = cardFor(name), bytes = cache.get(name);
+  if (!card || !bytes) return;
+  const full = document.createElement('canvas');
+  decodeToCanvas(bytes, full);
+  const t = card.querySelector('canvas');
+  t.width = 320; t.height = 192;
+  const tc = t.getContext('2d');
+  tc.imageSmoothingEnabled = true;
+  tc.drawImage(full, 0, 0, 320, 192);
+}
 
-  const buf = new Float32Array(w * h * 3);
-  for (let i = 0; i < w * h; i++) {
-    buf[i * 3]     = imgData.data[i * 4];
-    buf[i * 3 + 1] = imgData.data[i * 4 + 1];
-    buf[i * 3 + 2] = imgData.data[i * 4 + 2];
+function markCurrent() {
+  for (const c of $('gallery').children) {
+    if (!c.dataset || !c.dataset.name) continue;
+    const isCur = currentName && c.dataset.name.toLowerCase() === currentName.toLowerCase();
+    c.classList.toggle('current', !!isCur);
+    const badge = c.querySelector('.badge');
+    if (badge) badge.style.display = isCur ? '' : 'none';
   }
-  const out = new Uint8Array(w * h);
+}
 
-  for (let y = 0; y < h; y++) {
-    const forward = !serp || (y % 2 === 0);
-    const step = forward ? 1 : -1;
-    for (let i = 0; i < w; i++) {
-      const x = forward ? i : w - 1 - i;
-      const p = (y * w + x) * 3;
-      const r = Math.min(255, Math.max(0, buf[p]));
-      const g = Math.min(255, Math.max(0, buf[p + 1]));
-      const b = Math.min(255, Math.max(0, buf[p + 2]));
-      const ri = (r + 0.5) | 0, gi = (g + 0.5) | 0, bi = (b + 0.5) | 0;
+function renderGallery() {
+  const g = $('gallery');
+  g.textContent = '';
+  const valid = files.filter(f => f.size === IMG_BYTES).length;
+  $('galleryInfo').textContent = `${valid} image(s)` + (files.length > valid ? `, ${files.length - valid} with wrong size` : '');
+  if (!files.length) { g.innerHTML = '<span class="small">no files on the SD card</span>'; return; }
 
-      const idx = nearestIndex(ri, gi, bi, linear);
-      out[y * w + x] = idx;
+  for (const f of files) {
+    const ok = f.size === IMG_BYTES;
+    const card = document.createElement('div');
+    card.className = 'card' + (ok ? '' : ' bad');
+    card.dataset.name = f.name;
 
-      if (!dither) continue;
-      const [pr, pg, pb] = palSRGB[idx];
-      const er = (r - pr) * strength;
-      const eg = (g - pg) * strength;
-      const eb = (b - pb) * strength;
-      const spread = (xx, yy, wt) => {
-        if (xx < 0 || xx >= w || yy < 0 || yy >= h) return;
-        const q = (yy * w + xx) * 3;
-        buf[q]     += er * wt;
-        buf[q + 1] += eg * wt;
-        buf[q + 2] += eb * wt;
+    const cv = document.createElement('canvas');
+    cv.width = 320; cv.height = 192;
+    card.appendChild(cv);
+
+    const nm = document.createElement('div');
+    nm.className = 'name';
+    nm.textContent = f.name + (ok ? '' : `  (${f.size} B — wrong size)`);
+    const badge = document.createElement('span');
+    badge.className = 'badge'; badge.textContent = 'on panel'; badge.style.display = 'none';
+    nm.appendChild(badge);
+    card.appendChild(nm);
+
+    const row = document.createElement('div');
+    row.className = 'row';
+    const mk = (label, title, fn, cls) => {
+      const b = document.createElement('button');
+      b.textContent = label; b.title = title;
+      if (cls) b.className = cls;
+      b.onclick = fn;
+      row.appendChild(b);
+      return b;
+    };
+    if (ok) {
+      mk('▶ Show', 'display on the panel', () => displayCmd('CD ' + f.name));
+      mk('🔍', 'full-res preview', async () => {
+        try {
+          const bytes = await ensureBytes(f.name);
+          const c = document.createElement('canvas');
+          decodeToCanvas(bytes, c);
+          openViewer(c);
+        } catch (e) { log('preview failed: ' + e.message, 'err'); }
+      });
+    }
+    mk('🗑', 'delete from SD card', () => removeFile(f.name), 'danger');
+    card.appendChild(row);
+    g.appendChild(card);
+    if (cache.has(f.name)) drawThumb(f.name);
+  }
+  markCurrent();
+}
+
+function openViewer(canvas) {
+  $('viewerImg').src = canvas.toDataURL('image/png');
+  $('viewer').style.display = 'flex';
+}
+
+// ---------------------------------------------------------------- conversion
+function toEd025Color(r, g, b, gammaMatch) {
+  const pal = gammaMatch ? PALETTE_LIN : PALETTE;
+  let best = pal[0], bestD = Infinity;
+  for (const p of pal) {
+    let d;
+    if (gammaMatch) {
+      const lr = Math.pow(r/255,GAMMA), lg = Math.pow(g/255,GAMMA), lb = Math.pow(b/255,GAMMA);
+      const dr = lr - p.rgb[0], dg = lg - p.rgb[1], db = lb - p.rgb[2];
+      d = dr*dr*0.30 + dg*dg*0.59 + db*db*0.11;
+    } else {
+      const dr = r - p.rgb[0], dg = g - p.rgb[1], db = b - p.rgb[2];
+      d = dr*dr*0.30 + dg*dg*0.59 + db*db*0.11;
+    }
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  return best.idx;
+}
+
+// Pure conversion: bitmap -> 192000 packed-4bpp bytes. If previewCanvas is
+// given, the dithered result is also drawn there.
+function convertBitmap(bmp, fit, strength, gammaMatch, previewCanvas) {
+  const cw = document.createElement('canvas');
+  cw.width = IMG_W; cw.height = IMG_H;
+  const ctx = cw.getContext('2d', { alpha: false, willReadFrequently: true });
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, IMG_W, IMG_H);
+
+  const sw = bmp.width, sh = bmp.height;
+  let dx = 0, dy = 0, dW = IMG_W, dH = IMG_H;
+  if (fit === 'contain') {
+    const sc = Math.min(IMG_W / sw, IMG_H / sh);
+    dW = Math.round(sw * sc); dH = Math.round(sh * sc);
+    dx = (IMG_W - dW) >> 1; dy = (IMG_H - dH) >> 1;
+  } else if (fit === 'cover') {
+    const sc = Math.max(IMG_W / sw, IMG_H / sh);
+    dW = Math.round(sw * sc); dH = Math.round(sh * sc);
+    dx = (IMG_W - dW) >> 1; dy = (IMG_H - dH) >> 1;
+  }   // stretch: full frame, distorted
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(bmp, 0, 0, sw, sh, dx, dy, dW, dH);
+
+  let dctx = null;
+  if (previewCanvas) {
+    previewCanvas.width = IMG_W; previewCanvas.height = IMG_H;
+    dctx = previewCanvas.getContext('2d', { alpha: false });
+    dctx.fillStyle = '#fff'; dctx.fillRect(0, 0, IMG_W, IMG_H);
+    dctx.drawImage(cw, 0, 0);
+  }
+
+  const src = ctx.getImageData(0, 0, IMG_W, IMG_H).data;
+  const work = new Float32Array(src.length);
+  for (let i = 0; i < src.length; i++) work[i] = src[i];
+
+  const out = new Uint8Array(IMG_BYTES);
+  for (let y = 0; y < IMG_H; y++) {
+    const ltr = (y & 1) === 0;                     // serpentine
+    for (let k = 0; k < IMG_W; k++) {
+      const x = ltr ? k : (IMG_W - 1 - k);
+      const i = (y * IMG_W + x) * 4;
+      const r = Math.max(0, Math.min(255, work[i]));
+      const g = Math.max(0, Math.min(255, work[i+1]));
+      const b = Math.max(0, Math.min(255, work[i+2]));
+      const idx = toEd025Color(Math.round(r), Math.round(g), Math.round(b), gammaMatch);
+      const pr = PAL_BY_IDX[idx];
+      const er = (r - pr[0]) * strength, eg = (g - pr[1]) * strength, eb = (b - pr[2]) * strength;
+      const nx = ltr ? 1 : -1;                     // scan direction
+      const spread = (xx, yy, fac) => {
+        const tx = x + xx * nx, ty = y + yy;
+        if (tx < 0 || tx >= IMG_W || ty >= IMG_H) return;
+        const j = (ty * IMG_W + tx) * 4;
+        work[j] += er * fac; work[j+1] += eg * fac; work[j+2] += eb * fac;
       };
-      spread(x + step, y, 7 / 16);
-      spread(x - step, y + 1, 3 / 16);
-      spread(x, y + 1, 5 / 16);
-      spread(x + step, y + 1, 1 / 16);
+      spread( 1, 0, 7/16);
+      spread(-1, 1, 3/16);
+      spread( 0, 1, 5/16);
+      spread( 1, 1, 1/16);
+
+      const byteIdx = (y * IMG_W + x) >> 1;
+      const shift = (x & 1) ? 0 : 4;
+      out[byteIdx] = (out[byteIdx] & (0x0F << (4 - shift))) | (idx << shift);
+
+      if (dctx) {
+        dctx.fillStyle = `rgb(${pr[0]},${pr[1]},${pr[2]})`;
+        dctx.fillRect(x, y, 1, 1);
+      }
     }
   }
   return out;
 }
 
-// --- pack 4bpp (left pixel = high nibble) + previews ---
+function convertImage() {
+  if (!imgBitmap) return;
+  const fit = $('fitMode').value;
+  const strength = parseFloat($('ditherStrength').value);
+  const gammaMatch = $('gammaMatch').checked;
 
-function pack(rows) {
-  const data = new Uint8Array(IMG_BYTES);
-  let o = 0;
-  for (let y = 0; y < IMG_H; y++) {
-    for (let x = 0; x < IMG_W; x += 2) {
-      const left = rows[y * IMG_W + x] & 0x0F;
-      const right = rows[y * IMG_W + x + 1] & 0x0F;
-      data[o++] = (left << 4) | right;
+  convertedBytes = convertBitmap(imgBitmap, fit, strength, gammaMatch, $('canvas'));
+
+  $('btnSave').disabled = false;
+  $('btnView').disabled = false;
+  updateUploadEnabled();
+  $('convertInfo').textContent = `converted: ${IMG_BYTES} bytes (${fit}, dithered ×${strength.toFixed(1)})`;
+  log(`loaded image converted — ${IMG_BYTES} bytes`, 'info');
+}
+
+// ------------------------------------------------------------------ uploads
+function sdFileName() {
+  let n = ($('sdName').value.trim() || 'img')
+    .replace(/\.4bpp$/i, '').replace(/[^\w.-]/g, '_').replace(/^\.+/, '').slice(0, 36);
+  return (n || 'img') + '.4bpp';
+}
+
+function updateUploadEnabled() {
+  $('btnUpload').disabled = !(convertedBytes && port) || uploading || bulkRunning;
+  updateBulkEnabled();
+}
+
+async function doUpload(name, bytes) {
+  const blind = $('blindMode').checked;
+  const size = parseInt($('chunkSize').value, 10) || 2048;
+  const delay = parseInt($('chunkDelay').value, 10) || 25;
+  const sum = checksum(bytes);
+  log(`uploading ${bytes.length} bytes (sum=${sum}) to SD as "${name}"...`, 'msg');
+
+  if (!blind) {
+    const ready = waitForLine(/^READY/, 12000);
+    await writeLine('W ' + name);
+    const r = await ready;
+    if (!r) throw new Error('timeout waiting for "READY"');
+    if (/^ERR/.test(r)) throw new Error('board rejected: ' + r);
+  } else {
+    await writeLine('W ' + name);
+    await sleep(2500);
+  }
+
+  // watch for a mid-stream ERR while sending
+  let aborted = null;
+  readAbort = line => { if (/^ERR/.test(line)) aborted = line; };
+
+  const hdr = new Uint8Array(4);
+  new DataView(hdr.buffer).setUint32(0, bytes.length, true);
+  await writeBytes(hdr);
+
+  for (let off = 0; off < bytes.length && !aborted; off += size) {
+    await writeBytes(bytes.subarray(off, off + size));
+    await sleep(delay);
+    $('progressFill').style.width =
+      (100 * Math.min(off + size, bytes.length) / bytes.length).toFixed(1) + '%';
+  }
+  if (aborted) throw new Error('board reported: ' + aborted);
+
+  const verdict = waitForLine(/^OK/, 12000);   // installed before the trailer goes out
+  const sumBuf = new Uint8Array(4);
+  new DataView(sumBuf.buffer).setUint32(0, sum, true);
+  await writeBytes(sumBuf);
+
+  const v = await verdict;
+  if (v && /^OK/.test(v)) { log('✔ ' + v, 'ok'); return true; }
+  if (v) throw new Error(v);
+  if (blind) { log('sent (blind — no verdict)', 'info'); return true; }
+  throw new Error('no verdict received (timeout)');
+}
+
+async function uploadBytes() {
+  if (!convertedBytes || !writer || uploading || bulkRunning) return;
+  const name = sdFileName();
+  if (files.some(f => f.name.toLowerCase() === name.toLowerCase()) &&
+      !confirm(`"${name}" already exists on the SD card. Overwrite?`)) return;
+
+  uploading = true;
+  updateUploadEnabled();
+  $('progressBar').style.display = 'block';
+
+  let ok = false;
+  try {
+    ok = await locked(() => doUpload(name, convertedBytes));
+  } catch (e) {
+    log('upload failed: ' + e.message, 'err');
+  } finally {
+    uploading = false;
+    readAbort = null;
+    $('progressBar').style.display = 'none';
+    $('progressFill').style.width = '0%';
+    updateUploadEnabled();
+  }
+
+  if (ok) {
+    for (const k of [...cache.keys()]) if (k.toLowerCase() === name.toLowerCase()) cache.delete(k);
+    await refreshList();
+    if ($('autoDisplay').checked) await displayCmd('CD ' + name);
+  }
+}
+
+// ------------------------------------------------------------------ bulk upload
+function routeFiles(list) {
+  const imgs = [...list].filter(f => /^image\//.test(f.type));
+  if (!imgs.length) return;
+  if (imgs.length === 1) loadFile(imgs[0]);
+  else addBulkFiles(imgs);
+}
+
+function addBulkFiles(list) {
+  if (bulkRunning) { log('bulk upload is running; wait for it to finish', 'err'); return; }
+  for (const f of list) bulkQueue.push({ file: f, state: 'queued', msg: '' });
+  renderBulk();
+}
+
+function bulkBase(file) {
+  return file.name.replace(/\.[^.]+$/, '').replace(/[^\w.-]/g, '_').replace(/^\.+/, '').slice(0, 30) || 'img';
+}
+function bulkUnique(base, taken) {
+  let n = base + '.4bpp', i = 2;
+  while (taken.has(n.toLowerCase())) { n = base + '-' + i + '.4bpp'; i++; }
+  return n;
+}
+
+function updateBulkEnabled() {
+  const pending = bulkQueue.some(i => i.state === 'queued' || i.state === 'failed');
+  $('btnBulkStart').disabled = !port || bulkRunning || uploading || !pending;
+  $('btnBulkCancel').disabled = !bulkRunning;
+  $('btnBulkClear').disabled = bulkRunning;
+  $('btnBulkAdd').disabled = bulkRunning;
+}
+
+function renderBulk() {
+  const list = $('bulkList');
+  list.textContent = '';
+  for (const it of bulkQueue) {
+    const row = document.createElement('div');
+    row.className = 'bulkrow';
+    const a = document.createElement('span');
+    a.textContent = `${it.file.name} (${Math.round(it.file.size / 1024)} KB)`;
+    const b = document.createElement('span');
+    b.className = 'st-' + it.state;
+    b.textContent = it.state + (it.msg ? ' — ' + it.msg : '');
+    row.append(a, b);
+    list.appendChild(row);
+  }
+  const done = bulkQueue.filter(i => i.state === 'done').length;
+  $('bulkInfo').textContent = bulkQueue.length ? `${done}/${bulkQueue.length} done` : '';
+  updateBulkEnabled();
+}
+
+async function runBulk() {
+  if (bulkRunning || !port || uploading) return;
+  if (!bulkQueue.some(i => i.state === 'queued' || i.state === 'failed')) return;
+
+  bulkRunning = true; bulkCancel = false;
+  updateUploadEnabled();
+  renderBulk();
+
+  await refreshList();                                   // fresh view of the card
+  const taken = new Set(files.map(f => f.name.toLowerCase()));
+  const batchNames = new Set();
+  const policy = $('bulkPolicy').value;
+  const fit = $('fitMode').value;
+  const strength = parseFloat($('ditherStrength').value);
+  const gammaMatch = $('gammaMatch').checked;
+
+  $('progressBar').style.display = 'block';
+  let done = 0, skipped = 0, failed = 0;
+
+  for (const it of bulkQueue) {
+    if (bulkCancel) break;
+    if (it.state !== 'queued' && it.state !== 'failed') continue;
+
+    let name = bulkUnique(bulkBase(it.file), new Set());   // plain name first
+    const clash = taken.has(name.toLowerCase()) || batchNames.has(name.toLowerCase());
+    if (clash) {
+      if (batchNames.has(name.toLowerCase()) || policy === 'rename') {
+        name = bulkUnique(bulkBase(it.file), new Set([...taken, ...batchNames]));
+      } else if (policy === 'skip') {
+        it.state = 'skipped'; it.msg = 'already on card'; skipped++; renderBulk();
+        continue;
+      }   // overwrite: keep name
     }
-  }
-  return data;
-}
 
-function renderRows(rows, canvas) {
-  canvas.width = IMG_W;
-  canvas.height = IMG_H;
-  const ctx = canvas.getContext('2d');
-  const im = ctx.createImageData(IMG_W, IMG_H);
-  for (let i = 0; i < IMG_W * IMG_H; i++) {
-    const [r, g, b] = palSRGB[rows[i]];
-    im.data[i * 4] = r; im.data[i * 4 + 1] = g; im.data[i * 4 + 2] = b; im.data[i * 4 + 3] = 255;
-  }
-  ctx.putImageData(im, 0, 0);
-}
-
-$('btnConvert').onclick = () => {
-  if (!srcImg) return;
-  const btn = $('btnConvert');
-  btn.disabled = true;
-  btn.textContent = 'converting…';
-  setTimeout(() => {
     try {
-      const rgba = toDisplayRGBA();
-      const rows = quantise(rgba);
-      convertedBytes = pack(rows);
-      renderRows(rows, $('resultCanvas'));
-      log(`converted: ${IMG_BYTES} bytes (${cropRect ? 'crop' : $('fitMode').value}${$('dither').checked ? ', dithered ×' + $('ditherStrength').value : ''})`);
+      it.state = 'converting'; it.msg = ''; renderBulk();
+      await sleep(0);                                     // let the UI repaint
+      const bmp = await createImageBitmap(it.file);
+      const bytes = convertBitmap(bmp, fit, strength, gammaMatch, null);
+      if (bmp.close) bmp.close();
+
+      it.state = 'uploading'; it.msg = name; renderBulk();
+      $('progressFill').style.width = '0%';
+      await locked(() => doUpload(name, bytes));
+
+      batchNames.add(name.toLowerCase());
+      for (const k of [...cache.keys()]) if (k.toLowerCase() === name.toLowerCase()) cache.delete(k);
+      it.state = 'done'; it.msg = name; done++;
     } catch (e) {
-      log('convert failed: ' + e.message, 'err');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = '⚙ Convert & preview';
-      updateButtons();
+      readAbort = null;
+      it.state = 'failed'; it.msg = e.message; failed++;
+      log(`bulk: ${it.file.name} failed: ${e.message}`, 'err');
+      renderBulk();
+      break;   // the board may still be mid-transfer; stop rather than risk garbage
     }
-  }, 30);
-};
+    renderBulk();
+  }
 
-// --- full-resolution viewer ---
+  bulkRunning = false;
+  $('progressBar').style.display = 'none';
+  $('progressFill').style.width = '0%';
+  log(`bulk upload finished: ${done} uploaded, ${skipped} skipped, ${failed} failed` +
+      (bulkCancel ? ' (cancelled)' : ''), failed ? 'err' : 'ok');
+  updateUploadEnabled();
+  renderBulk();
+  await refreshList();
+}
 
-$('resultCanvas').onclick = () => {
+// ------------------------------------------------------------------ UI wire
+$('btnBulkAdd').onclick = () => $('bulkInput').click();
+$('bulkInput').onclick = e => { e.target.value = ''; };
+$('bulkInput').onchange = e => addBulkFiles(e.target.files);
+$('btnBulkStart').onclick = runBulk;
+$('btnBulkCancel').onclick = () => { bulkCancel = true; log('bulk upload: cancelling after current file…', 'info'); };
+$('btnBulkClear').onclick = () => { bulkQueue = []; renderBulk(); };
+renderBulk();
+
+$('btnConnect').onclick = () => port ? disconnect() : connect();
+
+$('btnConvert').onclick = convertImage;
+$('btnView').onclick = () => openViewer($('canvas'));
+$('viewer').onclick = () => $('viewer').style.display = 'none';
+
+$('btnSave').onclick = () => {
   if (!convertedBytes) return;
-  const vc = $('viewerCanvas');
-  vc.width = IMG_W;
-  vc.height = IMG_H;
-  vc.getContext('2d').drawImage($('resultCanvas'), 0, 0);
-  $('viewer').classList.add('show');
-};
-function closeViewer() { $('viewer').classList.remove('show'); }
-$('viewer').onclick = closeViewer;
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
-
-// --- downloads ---
-
-$('btnDownload').onclick = () => {
-  if (!convertedBytes) return;
+  const blob = new Blob([convertedBytes], { type: 'application/octet-stream' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([convertedBytes], { type: 'application/octet-stream' }));
-  a.download = convertedName + '_800x480.4bpp';
+  a.href = URL.createObjectURL(blob);
+  a.download = sdFileName();
   a.click();
   URL.revokeObjectURL(a.href);
 };
 
-$('btnSavePng').onclick = () => {
-  if (!convertedBytes) return;
-  $('resultCanvas').toBlob(blob => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = convertedName + '_800x480.png';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }, 'image/png');
+$('btnUpload').onclick = uploadBytes;
+
+$('btnM').onclick = refreshList;
+$('btnReloadThumbs').onclick = () => { cache.clear(); renderGallery(); loadThumbs(++listGen); };
+$('btnP').onclick = () => locked(() => request('P', /^-------------/, 5000));
+$('btnNext').onclick = () => displayCmd('N');
+$('btnPrev').onclick = () => displayCmd('B');
+$('btnRand').onclick = () => displayCmd('Z');
+$('btnAuto').onclick = () => {
+  const m = Math.max(0, parseInt($('autoMin').value, 10) || 0);
+  locked(() => request('A ' + m, /^OK auto/, 3000));
 };
 
-// ================================================================
-// SERIAL
-// ================================================================
-
-async function connect() {
-  try {
-    port = await navigator.serial.requestPort();
-    await port.open({ baudRate: BAUD, dataTerminalReady: true, requestToSend: true, flowControl: 'none' });
-    try {
-      await port.setSignals({ dataTerminalReady: true, requestToSend: true });
-      const sig = await port.getSignals();
-      log(`signals set — board reports DSR=${sig.dataSetReady}`);
-    } catch (e) { /* cosmetic */ }
-  } catch (e) {
-    if (e.name !== 'NotFoundError') log('open failed: ' + e.name + ' ' + e.message, 'err');
-    port = null; return;
-  }
-  connected = true;
-  lineBuf = ''; pendingLines = []; bytesTotal = 0;
-  $('stats').textContent = '0 bytes rx';
-  updateButtons();
-  log('serial port opened @ ' + BAUD);
-  readLoop();
-}
-
-async function disconnect() {
-  if (!port) return;
-  connected = false;
-  try { if (reader) await reader.cancel(); await port.close(); } catch (e) {}
-  port = null;
-  lineWaiters.forEach(w => { clearTimeout(w.timer); w.reject(new Error('disconnected')); });
-  lineWaiters = [];
-  log('serial port closed');
-  updateButtons();
-}
-
-async function readLoop() {
-  while (port && connected) {
-    try {
-      reader = port.readable.getReader();
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value && value.length) handleRx(value);
-      }
-    } catch (e) {
-      if (connected) log('read error: ' + e.name + ' ' + e.message, 'err');
-      break;
-    } finally {
-      try { reader?.releaseLock(); } catch (e) {}
-      reader = null;
-    }
-  }
-}
-
-function toPrintable(u8) {
-  let s = '';
-  for (const b of u8) {
-    if (b === 0x0A) s += '\n';
-    else if (b === 0x0D) continue;
-    else if (b >= 0x20 && b < 0x7F) s += String.fromCharCode(b);
-    else s += '·';
-  }
-  return s;
-}
-
-function handleRx(u8) {
-  bytesTotal += u8.length;
-  $('stats').textContent = bytesTotal + ' bytes rx';
-  if ($('hexMode').checked) { log('◀ ' + [...u8].map(b => b.toString(16).padStart(2, '0')).join(' ')); return; }
-  const text = dec.decode(u8, { stream: true });
-  const printable = toPrintable(u8);
-  if (printable.trim()) log('◀ ' + printable.trim());
-  lineBuf += text;
-  let idx;
-  while ((idx = lineBuf.indexOf('\n')) >= 0) {
-    const line = lineBuf.slice(0, idx).replace(/[\r\n]/g, '').trim();
-    lineBuf = lineBuf.slice(idx + 1);
-    if (line) { pendingLines.push(line); deliver(); }
-  }
-}
-
-function deliver() {
-  while (lineWaiters.length && pendingLines.length) {
-    const w = lineWaiters[0];
-    const i = pendingLines.findIndex(l => w.re.test(l));
-    if (i < 0) break;
-    const line = pendingLines.splice(i, 1)[0];
-    clearTimeout(w.timer);
-    lineWaiters.shift();
-    w.resolve(line);
-  }
-}
-
-function waitFor(re, timeoutMs, desc) {
-  return new Promise((resolve, reject) => {
-    const w = { re, resolve, reject };
-    w.timer = setTimeout(() => {
-      const i = lineWaiters.indexOf(w);
-      if (i >= 0) lineWaiters.splice(i, 1);
-      reject(new Error('timeout waiting for "' + (desc || re.source) + '"'));
-    }, timeoutMs);
-    lineWaiters.push(w);
-    deliver();
-  });
-}
-
-async function writeBytes(data) {
-  const w = port.writable.getWriter();
-  try { await w.write(data); } finally { w.releaseLock(); }
-}
-
-async function sendCmd(cmd) {
-  if (!port) return;
-  log('▶ ' + cmd);
-  try { await writeBytes(enc.encode(cmd + '\n')); }
-  catch (e) { log('write error: ' + e.message, 'err'); }
-}
-
-// ================================================================
-// UPLOAD  (U <n> → flash slot, W <name> → SD card)
-// ================================================================
-
-function byteSum(u8) {
-  let sum = 0;
-  for (let i = 0; i < u8.length; i++) sum = (sum + u8[i]) >>> 0;
-  return sum >>> 0;
-}
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-async function uploadBytes(buf) {
-  if (!connected || busy || !buf) return;
-  if (buf.length !== IMG_BYTES) {
-    flash(`internal error: payload is ${buf.length} bytes, need ${IMG_BYTES}`, 'err');
-    return;
-  }
-
-  const toSd = sdTarget();
-  let arg, cmd, describe;
-  if (toSd) {
-    const name = $('sdName').value.trim();
-    if (!name) { flash('enter a filename for the SD card', 'err'); return; }
-    arg = name;
-    cmd = `W ${name}`;
-    describe = `to SD as "${name}"`;
-  } else {
-    arg = $('slotSel').value;
-    cmd = `U ${arg}`;
-    describe = `to flash slot ${arg}`;
-  }
-
-  busy = true; updateButtons();
-  const chunkSize = 4096, chunkDelay = 15;
-  const blind = $('blindMode').checked;
-  const sum = byteSum(buf);
-  const pw = $('progressWrap'), pf = $('progressFill'), pl = $('progressLabel');
-  pw.style.display = 'block';
-  const prog = pct => { pf.style.width = pct + '%'; };
-
-  try {
-    log(`uploading ${buf.length} bytes (sum=${sum}) ${describe}${blind ? ' [blind]' : ''}…`);
-
-    await writeBytes(enc.encode(cmd + '\n'));
-
-    if (blind) {
-      prog(2); pl.textContent = toSd
-        ? 'waiting for card/file setup (~1.5 s, no handshake)'
-        : 'waiting out erase (~3 s, no handshake)';
-      await sleep(toSd ? 1500 : 3000);
-    } else {
-      await waitFor(/^READY/i, 5000, 'READY');
-      prog(2); pl.textContent = toSd
-        ? 'writing file header…'
-        : 'erasing… board needs ~2.5 s';
-      await sleep(toSd ? 500 : 2500);
-    }
-
-    const dv = new DataView(new ArrayBuffer(4));
-    dv.setUint32(0, buf.length, true);
-    await writeBytes(dv.buffer);
-    prog(4);
-
-    pl.textContent = 'sending payload…';
-    for (let off = 0; off < buf.length; off += chunkSize) {
-      const end = Math.min(off + chunkSize, buf.length);
-      await writeBytes(buf.slice(off, end));
-      prog(4 + Math.round(end / buf.length * 92));
-      if (chunkDelay) await sleep(chunkDelay);
-    }
-
-    const sm = new DataView(new ArrayBuffer(4));
-    sm.setUint32(0, sum, true);
-    await writeBytes(sm.buffer);
-    prog(97);
-    pl.textContent = blind ? 'waiting for flash write to settle (~8 s)' : 'waiting for verdict…';
-    await sleep(8000);
-
-    if (blind) {
-      prog(100); pl.textContent = 'done (blind)';
-      log('✔ blind upload finished — verify with ' + (toSd ? 'M' : 'D ' + arg) + ' or P', 'ok');
-      flash('Blind upload sent. Verify with ' + (toSd ? 'M' : 'D ' + arg), 'ok');
-    } else {
-      const verdict = await waitFor(/^(OK|ERR)/, 60000, 'OK/ERR');
-      prog(100); pl.textContent = 'done';
-      if (verdict.startsWith('OK')) {
-        log('✔ ' + verdict, 'ok');
-        flash('Upload succeeded: ' + verdict, 'ok');
-      } else {
-        log('✖ ' + verdict, 'err');
-        flash('Upload failed: ' + verdict, 'err');
-      }
-    }
-
-    return { toSd, arg };
-  } catch (e) {
-    log('✖ upload aborted: ' + e.message, 'err');
-    flash(e.message, 'err');
-    pw.style.display = 'none';
-  } finally {
-    busy = false; updateButtons();
-    setTimeout(() => { pw.style.display = 'none'; }, 3000);
-  }
-}
-
-$('btnUpload').onclick = async () => {
-  if (convertedBytes) await uploadBytes(convertedBytes);
+$('btnSend').onclick = () => {
+  const c = $('customCmd').value.trim();
+  if (c) { locked(() => writeLine(c)); $('customCmd').value = ''; }
 };
+$('customCmd').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnSend').click(); });
 
-$('btnUploadThenShow').onclick = async () => {
-  if (!convertedBytes) return;
-  const res = await uploadBytes(convertedBytes);
-  if (!res) return;
-  // After a successful upload, display what we sent. Blind mode can't confirm
-  // success, but a display attempt is harmless — the board validates the slot.
-  await sleep(res.toSd ? 2000 : 5000);
-  if (res.toSd) {
-    await sendCmd('CD ' + $('sdName').value.trim());
-  } else {
-    await sendCmd('D ' + res.arg);
-  }
-};
+$('drop').onclick = () => $('fileInput').click();
+$('fileInput').onchange = e => routeFiles(e.target.files);
+$('fileInput').onclick = e => { e.target.value = ''; };
 
-// ================================================================
-// WIRING
-// ================================================================
+function loadFile(file) {
+  createImageBitmap(file).then(bmp => {
+    imgBitmap = bmp;
+    const base = file.name.replace(/\.[^.]+$/, '').replace(/[^\w.-]/g, '_').slice(0, 36);
+    if (base) $('sdName').value = base;
+    log(`loaded "${file.name}" (${bmp.width}×${bmp.height})`, 'msg');
+    convertImage();
+  }).catch(err => log('image load failed: ' + err.message, 'err'));
+}
 
-$('btnConnect').onclick = connect;
-$('btnDisconnect').onclick = disconnect;
-$('btnClearLog').onclick = () => { $('log').innerHTML = ''; };
-$('cmdP').onclick = () => sendCmd('P');
-$('cmdL').onclick = () => sendCmd('L');
-$('cmdM').onclick = () => sendCmd('M');
-$('cmdV').onclick = () => sendCmd('V');
-$('cmdF').onclick = () => { if (confirm('Erase ALL stored images?')) sendCmd('F'); };
-$('cmdD').onclick = () => sendCmd('D ' + $('slotSelD').value);
-$('cmdX').onclick = () => sendCmd('X ' + $('slotSelX').value);
-
-document.querySelectorAll('input[name=target]').forEach(r => r.onchange = updateButtons);
-$('sdName').oninput = updateButtons;
-
-navigator.serial?.addEventListener?.('disconnect', ev => {
-  if (ev.target === port) { log('device unplugged!', 'err'); disconnect(); }
+['dragover', 'dragenter'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault();
+  $('drop').classList.add('over');
+}));
+['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault();
+  $('drop').classList.remove('over');
+}));
+document.addEventListener('drop', e => {
+  if (e.dataTransfer && e.dataTransfer.files) routeFiles(e.dataTransfer.files);
 });
 
-if (!('serial' in navigator)) {
-  log('Web Serial API not available — use desktop Chrome, Edge, or Opera.', 'err');
-  $('btnConnect').disabled = true;
-}
-updateButtons();
+window.addEventListener('load', () => {
+  log('page ready — click Connect, pick the board\'s serial port', 'info');
+});
 </script>
 </body>
 </html>
