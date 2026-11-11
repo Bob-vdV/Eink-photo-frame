@@ -103,7 +103,7 @@ static bool displayOK = false;
 #define STAGE_SLOTS      8            // rotate to spread flash wear (1.5 MB used)
 
 #define RX_TIMEOUT       15000
-#define MAX_FILES        64
+#define MAX_FILES        256
 #define NAME_LEN         48
 
 /* ---- state -------------------------------------------------------------- */

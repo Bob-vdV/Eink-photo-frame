@@ -25,7 +25,7 @@ board_h = 80.00; // Y
 board_t = 1.60; // thickness
 
 /* ---- fit / frame --------------------------------------------------- */
-fit = 0.35; // clearance per side around the board
+fit = 0.35; // clearance per side around the board/home/bob/documents2/Arduino/einkdisplay/images/
 fit_long = 0.3; // extra clearance per side on the long (80 mm) axis
 t_play = 0.3; // extra thickness room — the hook catches this much proud
 wall = 2.0; // side-wall thickness
@@ -163,14 +163,18 @@ module IOCutouts() {
 // CODE
 bottom();
 
-// translate([-0.5 * board_w, 16 + 0.5 * board_h, 0])
-//   rotate([0, 0, 180])
-//     IOCutouts();
+import("board.stl");
+
+translate([-0.5 * board_w, 16 + 0.5 * board_h, 0])
+  rotate([0, 0, 180])
+    IOCutouts();
 
 translate([0, 0, bottom_h]) {
   ee04_frame();
 
-  if (show_board)
-    %translate([0, 0, bezel_t])
-      linear_extrude(board_t) rrect(board_w, board_h, 3.0);
+  // if (show_board) {
+  //translate([0, 0, bezel_t])
+
+  // linear_extrude(board_t) rrect(board_w, board_h, 3.0);
+  // }
 }
