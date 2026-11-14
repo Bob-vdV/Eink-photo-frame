@@ -1,7 +1,10 @@
 # Eink photo frame
 
 Digital photo frame built with a Spectra 6 color eink display. 
+
 Upload & manage your photos with a custom website in Chromium. 
+
+The website is available at [https://bobvdv.nl/Eink-photo-frame/](https://bobvdv.nl/Eink-photo-frame/)
 
 ## Hardware
 
@@ -20,4 +23,19 @@ Hardware is listed below. Other displays and/or driver boards and SD card reader
 3. Upload the images to the display using the website.
 
 ## Website
-TODO
+
+Check out [https://bobvdv.nl/Eink-photo-frame/](https://bobvdv.nl/Eink-photo-frame/) (Chromium only!).
+
+Here you can connect to the board over USB.
+
+When connected, you can: 
+
+- Convert and upload images
+- View loaded images
+- Show any image on the display
+- Run debugging commands & view the serial logs
+
+## Disclaimer
+This project has been partially vibecoded. 
+
+However, all functionality has been tested manually. 
