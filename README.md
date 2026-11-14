@@ -1,37 +1,23 @@
 # Eink photo frame
 
+Digital photo frame built with a Spectra 6 color eink display. 
+Upload & manage your photos with a custom website in Chromium. 
+
 ## Hardware
 
-**Display**     Seeed 7.3-inch ePaper - Spectra 6 800x480
-**Board**       XIAO ePaper Display Board(nRF52840) - EN04
+Hardware is listed below. Other displays and/or driver boards and SD card readers can probably also be used with relatively low effort.
+
+| Display        | Seeed 7.3-inch ePaper - Spectra 6 800x480       | https://www.seeedstudio.com/7-3inch-Six-Color-eInk-ePaper-Display-with-800x480-Pixels-p-6567.html         |   |   |
+|----------------|-------------------------------------------------|-----------------------------------------------------------------------------------------------------------|---|---|
+| Board          | XIAO ePaper Display Board(nRF52840) - EN04      | https://www.seeedstudio.com/XIAO-ePaper-Display-Board-nRF52840-EN04-p-6589.html                           |   |   |
+| SD card Reader | TinyTronics microSD Card Adapter Module 3.3V-5V | https://www.tinytronics.nl/en/data-storage/modules/microsd-card-adapter-module-3.3v-5v-with-level-shifter |   |   |
+|                |                                                 |                                                                                                           |   |   |
 
 ## Installation
 
+1. Get platformio
+2. Push the firmware to your board.
+3. Upload the images to the display using the website.
 
-1. Get arduino
-2. Add Seeed library
-3. Put board into bootloader mode (double click reset)
-4. Push to board in arduino
-
-5. Get your image: 
-```bash
-uv run src/einkdisplay/spectra6_converter.py images/2/cropped.jpg --raw images/2/raw.bin
-
-uv run src/einkdisplay/upload_image.py images/2/raw.bin 
-```
-
-## Cool links
-
-
-[Image to C array converter (not suitable for spectra 6 display :(](https://projedefteri.com/en/tools/lcd-assistant/)
-
-
-
-## TODO
-
-[ ] Get buttons to work
-[ ] Use bluetooth LE to send photos
-[ ] Use website to send photos
-[ ] Auto cycle photos
-[ ] Buy photo frame
-[ ] Print stuff for frame
+## Website
+TODO
